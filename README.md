@@ -1,6 +1,6 @@
 # DQC: Differentiable Quantum Chemistry
 
-![Build](https://img.shields.io/github/workflow/status/diffqc/dqc/ci?style=flat-square)
+![Build](https://img.shields.io/github/workflow/status/diffqc/dqc/ci.yaml?style=flat-square&branch=main)
 [![Code coverage](https://img.shields.io/codecov/c/github/diffqc/dqc?style=flat-square)](https://app.codecov.io/gh/diffqc/dqc)
 [![Docs](https://img.shields.io/readthedocs/dqc?style=flat-square)](https://dqc.readthedocs.io/)
 
