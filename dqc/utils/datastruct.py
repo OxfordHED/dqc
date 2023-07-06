@@ -182,3 +182,47 @@ class ValGrad:
             lapl=self.lapl * f if self.lapl is not None else None,
             kin=self.kin * f if self.kin is not None else None,
         )
+
+
+class ValGradGrid:
+    """
+    A class to establish an euclidian mesh grid with axes density and 1d density gradient.
+    """
+
+    def __init__(
+        self,
+        densities: torch.Tensor,
+        gradients: torch.Tensor
+    ):
+        """
+
+        Parameters
+        ----------
+        densities: torch.Tensor containing density axis
+        gradients: torch.Tensor containing density gradient axis
+        """
+        self._dens = densities
+        self._grads = gradients
+
+        self._grid_dens, self._grid_grads = torch.meshgrid(densities, gradients, indexing="xy")
+
+        self._val_grad_grid = [
+            ValGrad(value=v, grad=g.unsqueeze(0))
+            for v, g in zip(
+                torch.unbind(self._grid_dens, 0),
+                torch.unbind(self._grid_grads, 0)
+            )
+        ]
+
+    def apply_fcn(self, fcn):
+        """Apply a function (which returns a torch.Tensor) to all ValGrad values.
+
+        Parameters
+        ----------
+        fcn: Callable, takes ValGrad and returns torch.Tensor
+
+        Returns
+        -------
+            stacked output of fcn applied to all grid values.
+        """
+        return torch.stack([fcn(vg) for vg in self._val_grad_grid])
