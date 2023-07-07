@@ -1,4 +1,4 @@
-import pylibxc
+import torch
 from dqc.xc.custom_xc import CustomXC, ZeroXC
 from dqc.xc.libxc import get_libxc
 
