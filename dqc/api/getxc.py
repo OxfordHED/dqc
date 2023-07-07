@@ -5,35 +5,9 @@ try:
 except (ImportError, ModuleNotFoundError) as e:
     warnings.warn("Failed to import pylibxc. Might not be able to use xc.")
 from dqc.xc.base_xc import BaseXC
-from dqc.xc.libxc import LibXCLDA, LibXCGGA, LibXCMGGA
+from dqc.xc.libxc import get_libxc
 
 __all__ = ["get_xc"]
-
-def get_libxc(name: str) -> BaseXC:
-    """
-    Get the XC object of the libxc based on its libxc's name.
-
-    Arguments
-    ---------
-    name: str
-        The full libxc name, e.g. "lda_c_pw"
-
-    Returns
-    -------
-    BaseXC
-        XC object that wraps the xc requested
-    """
-    obj = pylibxc.LibXCFunctional(name, "unpolarized")
-    family = obj.get_family()
-    del obj
-    if family == 1:  # LDA
-        return LibXCLDA(name)
-    elif family == 2:  # GGA
-        return LibXCGGA(name)
-    elif family == 4:  # MGGA
-        return LibXCMGGA(name)
-    else:
-        raise NotImplementedError("LibXC wrapper for family %d has not been implemented" % family)
 
 def get_xc(xcstr: str) -> BaseXC:
     """

@@ -16,6 +16,33 @@ ERRMSG = "This function cannot do broadcasting. " \
 N_VRHO = 2  # number of xc energy derivative w.r.t. density (i.e. 2: u, d)
 N_VSIGMA = 3  # number of energy derivative w.r.t. contracted gradient (i.e. 3: uu, ud, dd)
 
+def get_libxc(name: str) -> BaseXC:
+    """
+    Get the XC object of the libxc based on its libxc's name.
+
+    Arguments
+    ---------
+    name: str
+        The full libxc name, e.g. "lda_c_pw"
+
+    Returns
+    -------
+    BaseXC
+        XC object that wraps the xc requested
+    """
+    obj = pylibxc.LibXCFunctional(name, "unpolarized")
+    family = obj.get_family()
+    del obj
+    if family == 1:  # LDA
+        return LibXCLDA(name)
+    elif family == 2:  # GGA
+        return LibXCGGA(name)
+    elif family == 4:  # MGGA
+        return LibXCMGGA(name)
+    else:
+        raise NotImplementedError("LibXC wrapper for family %d has not been implemented" % family)
+
+
 class LibXCLDA(BaseXC):
     _family: int = 1
     _unpolfcn_wrapper = CalcLDALibXCUnpol

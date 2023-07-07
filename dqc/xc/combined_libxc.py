@@ -1,5 +1,7 @@
+import pylibxc
 from dqc.xc.custom_xc import CustomXC, ZeroXC
-from dqc.api.getxc import get_xc
+from dqc.xc.libxc import get_libxc
+
 
 class BasicCustomXC(CustomXC):
     """basic xc model joining components for x and c"""
@@ -12,7 +14,7 @@ class BasicCustomXC(CustomXC):
                 [m[: m.find("_")] == models[0][: models[0].find("_")] for m in models]
             ), "base models must belong to same family"
             super().__init__()
-            self.models = [get_xc(m) for m in models]
+            self.models = [get_libxc(m) for m in models]
             assert all([m.family is not None and m.family >= 0 for m in self.models])
 
     @property
