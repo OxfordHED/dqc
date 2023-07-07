@@ -27,8 +27,7 @@ class CustomXC(BaseXC, torch.nn.Module):
 
 class ZeroXC(CustomXC):
 
-    def family(self) -> int:
-        return 0
+    family = 0
 
     def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
         if isinstance(densinfo, SpinParam):
