@@ -23,3 +23,18 @@ class CustomXC(BaseXC, torch.nn.Module):
             return names
         else:
             return super().getparamnames(methodname, prefix=prefix)
+
+
+class ZeroXC(CustomXC):
+
+    def family(self) -> int:
+        return 0
+
+    def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
+        if isinstance(densinfo, SpinParam):
+            val_grad = SpinParam.u
+        else:
+            val_grad = densinfo
+
+        shape = val_grad.value.shape
+        return torch.zeros(shape)
