@@ -284,14 +284,13 @@ class ZeroXC(BaseXC):
         return torch.zeros(shape)
 
     def get_vxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
-        with self._enable_grad_densinfo:  # Unsure if this is required here
-            edensityxc = self.get_edensityxc(densinfo)  # all zeros
-            if isinstance(densinfo, SpinParam):
-                # all zeros
-                return SpinParam(u=ValGrad(value=edensityxc), d=ValGrad(value=edensityxc))
-            else:
-                # all zeros
-                return ValGrad(value=edensityxc)
+        edensityxc = self.get_edensityxc(densinfo)  # all zeros
+        if isinstance(densinfo, SpinParam):
+            # all zeros
+            return SpinParam(u=ValGrad(value=edensityxc), d=ValGrad(value=edensityxc))
+        else:
+            # all zeros
+            return ValGrad(value=edensityxc)
 
     def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
         if methodname == "get_edensityxc":
