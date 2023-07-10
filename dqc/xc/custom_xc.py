@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from abc import abstractmethod, abstractproperty
-from typing import Union, List
+from typing import List
 import torch
 from dqc.xc.base_xc import BaseXC
 from dqc.utils.datastruct import ValGrad, SpinParam
@@ -13,7 +15,7 @@ class CustomXC(BaseXC, torch.nn.Module):
         pass
 
     @abstractmethod
-    def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
+    def get_edensityxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
         pass
 
     def getparamnames(self, methodname: str = "", prefix: str = "") -> List[str]:

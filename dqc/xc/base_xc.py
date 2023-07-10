@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from contextlib import contextmanager
 from abc import abstractmethod, abstractproperty
 import torch
@@ -266,3 +268,32 @@ class MulBaseXC(BaseXC):
         if isinstance(self.b, torch.Tensor):
             params = params + [prefix + "b"]
         return params
+
+
+class ZeroXC(BaseXC):
+
+    family = 0
+
+    def get_edensityxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
+        if isinstance(densinfo, SpinParam):
+            val_grad = densinfo.u
+        else:
+            val_grad = densinfo
+
+        shape = val_grad.value.shape
+        return torch.zeros(shape)
+
+    def get_vxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
+        edensityxc = self.get_edensityxc(densinfo)  # all zeros
+        if isinstance(densinfo, SpinParam):
+            # all zeros
+            return SpinParam(u=ValGrad(value=edensityxc), d=ValGrad(value=edensityxc))
+        else:
+            # all zeros
+            return ValGrad(value=edensityxc)
+
+    def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
+        if methodname == "get_edensityxc":
+            return []
+        else:
+            return super().getparamnames(methodname, prefix=prefix)
