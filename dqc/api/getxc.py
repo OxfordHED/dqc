@@ -38,4 +38,7 @@ def get_xc(xc_names: str | List[str]) -> BaseXC:
         glob = {"get_libxc": get_libxc}
         return eval(new_xcstr, glob)
     else:
-        return sum(get_libxc(xc_name) for xc_name in xc_names)
+        xc_sum = get_libxc(xc_names[0])
+        for xc_name in xc_names[1:]:
+            xc_sum += get_libxc(xc_name)
+        return xc_sum
