@@ -25,33 +25,3 @@ class CustomXC(BaseXC, torch.nn.Module):
             return names
         else:
             return super().getparamnames(methodname, prefix=prefix)
-
-
-class ZeroXC(CustomXC):
-
-    family = 0
-
-    def get_edensityxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
-        if isinstance(densinfo, SpinParam):
-            val_grad = densinfo.u
-        else:
-            val_grad = densinfo
-
-        shape = val_grad.value.shape
-        return torch.zeros(shape)
-
-    def get_vxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
-        with self._enable_grad_densinfo:  # Unsure if this is required here
-            edensityxc = self.get_edensityxc(densinfo)  # all zeros
-            if isinstance(densinfo, SpinParam):
-                # all zeros
-                return SpinParam(u=ValGrad(value=edensityxc), d=ValGrad(value=edensityxc))
-            else:
-                # all zeros
-                return ValGrad(value=edensityxc)
-
-    def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
-        if methodname == "get_vxc":
-            return self.getparamnames("get_edensityxc", prefix=prefix)
-        else:
-            raise KeyError("Unknown methodname: %s" % methodname)
