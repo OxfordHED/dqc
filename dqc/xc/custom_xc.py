@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from abc import abstractmethod, abstractproperty
-from typing import Union, List
+from typing import List
 import torch
 from dqc.xc.base_xc import BaseXC
 from dqc.utils.datastruct import ValGrad, SpinParam
@@ -13,7 +15,7 @@ class CustomXC(BaseXC, torch.nn.Module):
         pass
 
     @abstractmethod
-    def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
+    def get_edensityxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
         pass
 
     def getparamnames(self, methodname: str = "", prefix: str = "") -> List[str]:
@@ -29,11 +31,21 @@ class ZeroXC(CustomXC):
 
     family = 0
 
-    def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
+    def get_edensityxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
         if isinstance(densinfo, SpinParam):
-            val_grad = SpinParam.u
+            val_grad = densinfo.u
         else:
             val_grad = densinfo
 
         shape = val_grad.value.shape
         return torch.zeros(shape)
+
+    def get_vxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
+        with self._enable_grad_densinfo:  # Unsure if this is required here
+            edensityxc = self.get_edensityxc(densinfo)  # all zeros
+            if isinstance(densinfo, SpinParam):
+                # all zeros
+                return SpinParam(u=ValGrad(value=edensityxc), d=ValGrad(value=edensityxc))
+            else:
+                # all zeros
+                return ValGrad(value=edensityxc)
