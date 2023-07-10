@@ -49,3 +49,9 @@ class ZeroXC(CustomXC):
             else:
                 # all zeros
                 return ValGrad(value=edensityxc)
+
+    def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
+        if methodname == "get_vxc":
+            return self.getparamnames("get_edensityxc", prefix=prefix)
+        else:
+            raise KeyError("Unknown methodname: %s" % methodname)
