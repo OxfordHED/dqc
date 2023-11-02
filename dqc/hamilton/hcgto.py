@@ -439,7 +439,7 @@ class HamiltonCGTO(BaseHamilton):
 
         # dens: (*BD, ngrid)
         # gdens: (*BD, ndim, ngrid)
-        res = ValGrad(value=dens, grad=gdens, lapl=lapldens, kin=kindens)
+        res = ValGrad(value=dens, grad=gdens, lapl=lapldens, kin=kindens, grid=self.grid)
         return res
 
     def _get_vxc_from_potinfo(self, potinfo: ValGrad) -> xt.LinearOperator:
