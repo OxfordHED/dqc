@@ -13,8 +13,7 @@ pylibxc2 = "^6.0.0"
 h5py = "3.1.0"
 basis-set-exchange = "^0.9.1"
 matplotlib = "3.7.3"
-torch = {url = "http://download.pytorch.org/whl/cpu/torch-2.0.1%2Bcpu-cp38-cp38-linux_x86_64.whl#sha256=8046f49deae5a3d219b9f6059a1f478ae321f232e660249355a8bf6dcaa810c1"}
-torch-cluster = {url = "https://data.pyg.org/whl/torch-2.0.0%2Bcpu/torch_cluster-1.6.3%2Bpt20cpu-cp38-cp38-linux_x86_64.whl"}
+torch = ">=2.0.0"
 
 
 [build-system]
