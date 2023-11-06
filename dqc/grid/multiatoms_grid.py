@@ -67,11 +67,10 @@ class BeckeGrid(BaseGrid):
             n_points = self._rgrid.shape[0]
             self._graph = torch.zeros((n_points, n_points), dtype=self._dtype)
             print("Generating graph...")
-            for i in range(n_points):
-                print(f"Row {i} / {n_points}")
-                for j in range(i + 1, n_points):
-                    self._graph[i, j] = 1 / (self._rgrid[i] - self._rgrid[j]).square().sum().sqrt()
-                    self._graph[j, i] = 1 / (self._rgrid[i] - self._rgrid[j]).square().sum().sqrt()
+            t1 = tf.reshape(t, (1, n_points, 3))
+            t2 = tf.reshape(t, (n_points, 1, 3))
+
+            result = tf.norm(t1 - t2, ord='euclidean', axis=2, )
             print("Done generating graph.")
         else:
             raise KeyError("Invalid graph_method: %s" % graph_method)
