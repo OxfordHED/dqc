@@ -65,12 +65,11 @@ class BeckeGrid(BaseGrid):
     def generate_graph(self, graph_method: str):
         if graph_method == "full":
             n_points = self._rgrid.shape[0]
-            self._graph = torch.zeros((n_points, n_points), dtype=self._dtype)
             print("Generating graph...")
-            t1 = tf.reshape(t, (1, n_points, 3))
-            t2 = tf.reshape(t, (n_points, 1, 3))
+            X = self._rgrid.reshape((1, n_points, 3))
+            Y = self._rgrid.reshape((1, n_points, 3))
 
-            result = tf.norm(t1 - t2, ord='euclidean', axis=2, )
+            self._graph = torch.cdist(X, Y).to(self._dtype)
             print("Done generating graph.")
         else:
             raise KeyError("Invalid graph_method: %s" % graph_method)
