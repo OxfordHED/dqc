@@ -22,6 +22,7 @@ class BeckeGrid(BaseGrid):
         assert len(atomgrid) > 0
         self._dtype = atomgrid[0].dtype
         self._device = atomgrid[0].device
+        self._graph = None
 
         # construct the grid points positions, weights, and the index of grid corresponding to each atom
         rgrids, self._rgrid, dvol_atoms = _construct_rgrids(atomgrid, atompos)
@@ -40,6 +41,10 @@ class BeckeGrid(BaseGrid):
         return self._device
 
     @property
+    def graph(self) -> torch.Tensor:
+        return self._graph
+
+    @property
     def coord_type(self):
         return "cart"
 
@@ -56,6 +61,17 @@ class BeckeGrid(BaseGrid):
             return [prefix + "_dvolume"]
         else:
             raise KeyError("Invalid methodname: %s" % methodname)
+
+    def generate_graph(self, graph_method: str):
+        if graph_method == "full":
+            n_points = self._rgrid.shape[0]
+            self._graph = torch.zeros((n_points, n_points), dtype=self._dtype)
+            for i in range(n_points):
+                for j in range(i + 1, n_points):
+                    self._graph[i, j] = 1 / (self._rgrid[i] - self._rgrid[j]).square().sum().sqrt()
+                    self._graph[j, i] = 1 / (self._rgrid[i] - self._rgrid[j]).square().sum().sqrt()
+        else:
+            raise KeyError("Invalid graph_method: %s" % graph_method)
 
 class PBCBeckeGrid(BaseGrid):
     """

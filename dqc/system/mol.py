@@ -90,6 +90,7 @@ class Mol(BaseSystem):
                  dtype: torch.dtype = torch.float64,
                  device: torch.device = torch.device('cpu'),
                  grid_params: dict | None = None
+                 graph: str | None = None,
                  ):
         self._grid_params = grid_params
         self._dtype = dtype
@@ -98,6 +99,7 @@ class Mol(BaseSystem):
         self._basis_inp = basis
         self._grid: Optional[BaseGrid] = None
         self._vext = vext
+        self._graph = graph
 
         # make efield a tuple
         self._efield = _normalize_efield(efield)
@@ -276,6 +278,8 @@ class Mol(BaseSystem):
             self._atompos,
             **kwargs
         )
+        if self._graph is not None:
+            self._grid.generate_graph(self._graph)
         logger.log("Constructing the integration grid: done")
 
         # #        0,  1,  2,  3,  4,  5
