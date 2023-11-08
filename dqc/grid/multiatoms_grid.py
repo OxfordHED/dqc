@@ -72,7 +72,7 @@ class BeckeGrid(BaseGrid):
                 graph_1d = torch.cdist(start_1d, end_1d).to(self._dtype)
                 graph.append(graph_1d)
             print([g.shape for g in graph])
-            self._graph = torch.stacat(graph, dim=0)
+            self._graph = torch.stack(graph, dim=0)
             print(self._graph.shape)
         else:
             raise KeyError("Invalid graph_method: %s" % graph_method)
