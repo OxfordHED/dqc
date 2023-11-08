@@ -66,13 +66,13 @@ class BeckeGrid(BaseGrid):
         if graph_method == "full":
             n_points = self._rgrid.shape[0]
             graph = []
-            for i in range(2):
+            for i in range(3):
                 start_1d = self._rgrid[:, 0].reshape((1, n_points, 1))
                 end_1d = self._rgrid[:, 0].reshape((1, n_points, 1))
                 graph_1d = torch.cdist(start_1d, end_1d).to(self._dtype)
                 graph.append(graph_1d)
             print([g.shape for g in graph])
-            self._graph = torch.stack(graph, dim=0)
+            self._graph = torch.cat(graph, dim=0)
             print(self._graph.shape)
         else:
             raise KeyError("Invalid graph_method: %s" % graph_method)
