@@ -67,8 +67,8 @@ class BeckeGrid(BaseGrid):
             n_points = self._rgrid.shape[0]
             graph = []
             for i in range(3):
-                start_1d = self._rgrid[:, 0].reshape((1, n_points, 1))
-                end_1d = self._rgrid[:, 0].reshape((1, n_points, 1))
+                start_1d = self._rgrid[:, i].reshape((1, n_points, 1))
+                end_1d = self._rgrid[:, i].reshape((1, n_points, 1))
                 graph_1d = torch.cdist(start_1d, end_1d).to(self._dtype)
                 graph.append(graph_1d)
             print([g.shape for g in graph])
