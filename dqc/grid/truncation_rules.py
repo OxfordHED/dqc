@@ -161,14 +161,16 @@ class NWChemTrunc(BaseTruncationRules):
 
     def _get_precs(self, atz: int) -> List[int]:
         # returns the list of precisions
+        # The fixed precs_idxs have to be shifted down by one, because PySCF Lebedev precision list
+        # includes an entry for level 0, which we don't have.
         prec_val = _get_nr(self._prec, atz)
-        if prec_val == 13:
-            precs_idxs = [5, 6, 6, 6, 5]
+        if prec_val == 11:
+            precs_idxs = [4, 5, 5, 5, 4]
             res = [self._precs_list[ii] for ii in precs_idxs]
             return res
-        elif prec_val >= 13:
+        elif prec_val >= 11:
             idx: int = self._precs_list.index(prec_val)
-            precs_idxs = [5, 7, idx - 1, idx, idx - 1]
+            precs_idxs = [4, 6, idx - 1, idx, idx - 1]
             res = [self._precs_list[ii] for ii in precs_idxs]
             return res
         else:
@@ -176,12 +178,12 @@ class NWChemTrunc(BaseTruncationRules):
 
     def to_truncate(self, atz: int) -> bool:
         prec_val = _get_nr(self._prec, atz)
-        if prec_val < 13:
+        if prec_val < 11:
             return False
         return True
 
     def rad_slices(self, atz: int, radgrid: RadialGrid) -> List[slice]:
-        ratom = self._radii_list[atz]
+        ratom = self._radii_list[atz] + 1e-200  # Added offset to match pyscf
         ralphas = self._alphas * ratom
         rgrid = radgrid.get_rgrid().reshape(-1, 1)  # (nr, 1)
         if atz <= 2:  # H & He
