@@ -183,7 +183,7 @@ class NWChemTrunc(BaseTruncationRules):
         return True
 
     def rad_slices(self, atz: int, radgrid: RadialGrid) -> List[slice]:
-        ratom = self._radii_list[atz] + 1e-200  # Added offset to match pyscf
+        ratom = self._radii_list[atz]
         ralphas = self._alphas * ratom
         rgrid = radgrid.get_rgrid().reshape(-1, 1)  # (nr, 1)
         if atz <= 2:  # H & He
