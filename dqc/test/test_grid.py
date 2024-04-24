@@ -1,17 +1,26 @@
+from itertools import product
+
 import torch
 import numpy as np
 import pytest
+from pyscf import gto, dft
+
 from dqc.grid.radial_grid import RadialGrid
 from dqc.grid.lebedev_grid import LebedevGrid
 from dqc.grid.multiatoms_grid import BeckeGrid, PBCBeckeGrid
 from dqc.grid.factory import get_predefined_grid
 from dqc.hamilton.intor.lattice import Lattice
+from dqc.utils.periodictable import periodic_table_atomz
+from dqc.system.mol import Mol
 
 rgrid_combinations = [
     ("chebyshev", "logm3"),
     ("uniform", "de2"),
     ("chebyshev2", "treutlerm4"),
 ]
+
+# Check all atoms
+atom_moldescs = [f"{k} 1. 0. 0." for k, v in periodic_table_atomz.items() if v <= 36]
 
 @pytest.mark.parametrize(
     "grid_integrator,grid_transform",
@@ -102,6 +111,45 @@ def test_multiatoms_grid_dvol(rgrid_integrator, rgrid_transform):
 
     # TODO: rtol is relatively large, maybe inspect the Becke integration grid?
     assert torch.allclose(int1, int1 * 0 + val1, rtol=3e-3)
+
+@pytest.mark.parametrize(
+    "moldesc,use_xi",
+    product(atom_moldescs, [True, False])
+)
+def test_grid_size(moldesc: str, use_xi: bool):
+
+    def get_spin_0_or_1(moldesc: str) -> int:
+        """A helper function to pick the lowest spin with correct parity.
+
+        Args:
+            moldesc: str, the formatted description of the molecule
+
+        Returns:
+            int, 0 or 1 calculated as num_electrons % 2
+        """
+        atom_list = moldesc.split(";")
+        element_symbols = [atom.strip().split()[0] for atom in atom_list]
+        elem_nums = [periodic_table_atomz[es] for es in element_symbols]
+        return sum(elem_nums) % 2
+
+    spin = get_spin_0_or_1(moldesc)
+
+    mol_dqc = Mol(moldesc, basis="pc-2", grid=3, spin=spin, use_xi=use_xi)
+    mol_dqc.setup_grid()
+    dqc_grid = mol_dqc.get_grid().get_rgrid()
+
+    mol_pyscf = gto.M(atom=moldesc, basis="pc-2", spin=spin, unit="B")
+    pyscf_dft = dft.KS(mol_pyscf, "lda")
+    pyscf_dft.small_rho_cutoff = 1e-21
+    pyscf_dft.grids.alignment = 0
+    pyscf_dft.kernel()
+    pyscf_grid = pyscf_dft.grids.coords
+
+    if not use_xi:
+        assert len(dqc_grid.numpy()) == len(pyscf_grid)
+    else:
+        with pytest.xfail("Xis not implemented in PySCF"):
+            assert len(dqc_grid.numpy()) == len(pyscf_grid)
 
 @pytest.mark.parametrize(
     "rgrid_integrator,rgrid_transform",

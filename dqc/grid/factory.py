@@ -139,6 +139,7 @@ def get_grid(atomzs: Union[List[int], torch.Tensor], atompos: torch.Tensor,
              atom_radii: str = "expected",
              multiatoms_scheme: str = "becke",
              truncate: Optional[str] = "dasgupta",
+             use_xi: bool = True,
              dtype: torch.dtype = _dtype,
              device: torch.device = _device) -> BaseGrid:
     # atompos: (natoms, ndim)
@@ -172,7 +173,7 @@ def get_grid(atomzs: Union[List[int], torch.Tensor], atompos: torch.Tensor,
         "logm3":
             lambda atz: LogM3Transformation(ra=atom_radii_list[atz]),
         "treutlerm4":
-            lambda atz: TreutlerM4Transformation(xi=__treutler_xi[atz], alpha=0.6),
+            lambda atz: TreutlerM4Transformation(xi=__treutler_xi[atz] if use_xi else 1, alpha=0.6),
     }
     radgrid_tf = get_option("radial grid transformation", radgrid_transform, radgrid_tf_options)
 
@@ -244,6 +245,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                         atompos: torch.Tensor,
                         *,
                         lattice: Optional[Lattice] = None,
+                        use_xi: bool = True,
                         dtype: torch.dtype = _dtype, device: torch.device = _device) -> BaseGrid:
     """
     Returns the predefined grid object given the grid name.
@@ -258,6 +260,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                             atom_radii="expected",
                             multiatoms_scheme="becke",
                             truncate="dasgupta",
+                            use_xi=use_xi,
                             dtype=dtype, device=device)
         elif grid_inp == "sg3":
             return get_grid(atomzs, atompos, lattice=lattice,
@@ -268,6 +271,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                             atom_radii="expected",
                             multiatoms_scheme="becke",
                             truncate="dasgupta",
+                            use_xi=use_xi,
                             dtype=dtype, device=device)
         else:
             raise ValueError(f"Unknown grid name: {grid_inp}")
@@ -316,6 +320,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                         atom_radii="bragg",
                         multiatoms_scheme="treutler",
                         truncate="nwchem",
+                        use_xi=use_xi,
                         dtype=dtype, device=device)
     else:
         raise TypeError("Unknown type of grid_inp: %s" % type(grid_inp))
