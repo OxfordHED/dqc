@@ -89,9 +89,9 @@ class Mol(BaseSystem):
                  vext: Optional[torch.Tensor] = None,
                  dtype: torch.dtype = torch.float64,
                  device: torch.device = torch.device('cpu'),
-                 use_xi: bool = True
+                 grid_params: dict | None = None
                  ):
-        self._use_xi = use_xi
+        self._grid_params = grid_params
         self._dtype = dtype
         self._device = device
         self._grid_inp = grid
@@ -264,8 +264,18 @@ class Mol(BaseSystem):
     def setup_grid(self) -> None:
         grid_inp = self._grid_inp
         logger.log("Constructing the integration grid")
-        self._grid = get_predefined_grid(self._grid_inp, self._atomzs_int, self._atompos, use_xi=self._use_xi,
-                                         dtype=self._dtype, device=self._device)
+        kwargs = {
+            "dtype": self._dtype,
+            "device": self._device
+        }
+        if self._grid_params is not None:
+            kwargs = {**self._grid_params, **kwargs}
+        self._grid = get_predefined_grid(
+            self._grid_inp,
+            self._atomzs_int,
+            self._atompos,
+            **kwargs
+        )
         logger.log("Constructing the integration grid: done")
 
         # #        0,  1,  2,  3,  4,  5

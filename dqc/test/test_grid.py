@@ -113,10 +113,10 @@ def test_multiatoms_grid_dvol(rgrid_integrator, rgrid_transform):
     assert torch.allclose(int1, int1 * 0 + val1, rtol=3e-3)
 
 @pytest.mark.parametrize(
-    "moldesc,use_xi",
-    product(atom_moldescs, [True, False])
+    "moldesc,use_xi,prune",
+    product(atom_moldescs[::5], [True, False], [True, False])
 )
-def test_grid_size(moldesc: str, use_xi: bool):
+def test_grid_size(moldesc: str, use_xi: bool, prune: bool):
 
     def get_spin_0_or_1(moldesc: str) -> int:
         """A helper function to pick the lowest spin with correct parity.
@@ -134,22 +134,26 @@ def test_grid_size(moldesc: str, use_xi: bool):
 
     spin = get_spin_0_or_1(moldesc)
 
-    mol_dqc = Mol(moldesc, basis="pc-2", grid=3, spin=spin, use_xi=use_xi)
+    dqc_pruning = "no" if not prune else "nwchem"
+    grid_params = {
+        "use_xi": use_xi,
+        "grid_pruning": dqc_pruning
+    }
+
+    mol_dqc = Mol(moldesc, basis="pc-2", grid=3, spin=spin, grid_params=grid_params)
     mol_dqc.setup_grid()
-    dqc_grid = mol_dqc.get_grid().get_rgrid()
+    dqc_grid = mol_dqc.get_grid().get_rgrid().numpy()
 
     mol_pyscf = gto.M(atom=moldesc, basis="pc-2", spin=spin, unit="B")
     pyscf_dft = dft.KS(mol_pyscf, "lda")
     pyscf_dft.small_rho_cutoff = 1e-21
     pyscf_dft.grids.alignment = 0
+    if not prune:
+        pyscf_dft.grids.prune = None
     pyscf_dft.kernel()
     pyscf_grid = pyscf_dft.grids.coords
 
-    if not use_xi:
-        assert len(dqc_grid.numpy()) == len(pyscf_grid)
-    else:
-        with pytest.xfail("Xis not implemented in PySCF"):
-            assert len(dqc_grid.numpy()) == len(pyscf_grid)
+    assert len(pyscf_grid) == len(dqc_grid)
 
 @pytest.mark.parametrize(
     "rgrid_integrator,rgrid_transform",

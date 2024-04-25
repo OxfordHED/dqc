@@ -246,6 +246,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                         *,
                         lattice: Optional[Lattice] = None,
                         use_xi: bool = True,
+                        grid_pruning: str = None,
                         dtype: torch.dtype = _dtype, device: torch.device = _device) -> BaseGrid:
     """
     Returns the predefined grid object given the grid name.
@@ -259,7 +260,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                             # using expected from de2 ref: DOI 10.1007/s00214-012-1169-z
                             atom_radii="expected",
                             multiatoms_scheme="becke",
-                            truncate="dasgupta",
+                            truncate="dasgupta" if grid_pruning is None else grid_pruning,
                             use_xi=use_xi,
                             dtype=dtype, device=device)
         elif grid_inp == "sg3":
@@ -270,7 +271,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                             # using expected from de2 ref: DOI 10.1007/s00214-012-1169-z
                             atom_radii="expected",
                             multiatoms_scheme="becke",
-                            truncate="dasgupta",
+                            truncate="dasgupta" if grid_pruning is None else grid_pruning,
                             use_xi=use_xi,
                             dtype=dtype, device=device)
         else:
@@ -319,7 +320,7 @@ def get_predefined_grid(grid_inp: Union[int, str], atomzs: Union[List[int], torc
                         radgrid_transform="treutlerm4",
                         atom_radii="bragg",
                         multiatoms_scheme="treutler",
-                        truncate="nwchem",
+                        truncate="nwchem" if grid_pruning is None else grid_pruning,
                         use_xi=use_xi,
                         dtype=dtype, device=device)
     else:
