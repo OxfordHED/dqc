@@ -191,6 +191,12 @@ class SCF_QCCalc(BaseQCCalc):
         aodm = self.aodm()
         return aodm if not isinstance(aodm, SpinParam) else (aodm.u + aodm.d)
 
+    def get_rho(self) -> torch.Tensor:
+        assert self._has_run
+        aodmt = self.total_aodm()
+        ham = self.get_system().get_hamiltonian()
+        return ham.aodm2dens(aodmt, ham.grid.get_rgrid())
+
     def dm2energy(self, dm: Union[torch.Tensor, SpinParam[torch.Tensor]]):
         # calculate the energy given the density matrix
         assert (isinstance(dm, torch.Tensor) and not self._polarized) or \

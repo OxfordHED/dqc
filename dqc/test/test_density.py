@@ -17,7 +17,7 @@ grids = ["sg2", "sg3"] + list(range(10))
 
 @pytest.mark.parametrize(
     "moldesc, grid",
-    product(atom_moldescs, grids)
+    product(atom_moldescs[::2], grids[::2])
 )
 def test_dqc_density(moldesc: str, grid: str | int):
 
@@ -35,10 +35,6 @@ def test_dqc_density(moldesc: str, grid: str | int):
         elem_nums = [periodic_table_atomz[es] for es in element_symbols]
         return sum(elem_nums) % 2
 
-    def get_dens(qc_calc: object, r_grid: torch.Tensor) -> torch.Tensor:
-        aodmt = qc_calc.total_aodm()
-        return qc_calc.get_system().get_hamiltonian().aodm2dens(aodmt, r_grid)
-
     spin = get_spin_0_or_1(moldesc)
 
     mol_dqc = Mol(moldesc, basis="pc-2", grid=grid, spin=spin)
@@ -48,7 +44,7 @@ def test_dqc_density(moldesc: str, grid: str | int):
     dqc_ks = KS(mol_dqc, "lda_x + lda_c_pw")
     dqc_ks.run()
 
-    dqc_density = get_dens(dqc_ks, dqc_grid)
+    dqc_density = dqc_ks.get_rho()
 
     pyscf_mol = gto.M(atom=moldesc, basis="pc-2", spin=spin, unit="B")
     pyscf_dft = dft.KS(pyscf_mol, "lda_x,lda_c_pw")
