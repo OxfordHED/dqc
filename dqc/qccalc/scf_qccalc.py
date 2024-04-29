@@ -186,6 +186,11 @@ class SCF_QCCalc(BaseQCCalc):
         assert self._has_run
         return self._dm
 
+    def total_aodm(self) -> torch.Tensor:
+        assert self._has_run
+        aodm = self.aodm()
+        return aodm if not isinstance(aodm, SpinParam) else (aodm.u + aodm.d)
+
     def dm2energy(self, dm: Union[torch.Tensor, SpinParam[torch.Tensor]]):
         # calculate the energy given the density matrix
         assert (isinstance(dm, torch.Tensor) and not self._polarized) or \

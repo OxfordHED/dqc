@@ -35,12 +35,8 @@ def test_dqc_density(moldesc: str, grid: str | int):
         elem_nums = [periodic_table_atomz[es] for es in element_symbols]
         return sum(elem_nums) % 2
 
-    def get_total_aodm(qc_calc: object) -> torch.Tensor:
-        aodm = qc_calc.aodm()
-        return aodm if not isinstance(aodm, SpinParam) else (aodm.u + aodm.d)
-
     def get_dens(qc_calc: object, r_grid: torch.Tensor) -> torch.Tensor:
-        aodmt = get_total_aodm(qc_calc)
+        aodmt = qc_calc.total_aodm()
         return qc_calc.get_system().get_hamiltonian().aodm2dens(aodmt, r_grid)
 
     spin = get_spin_0_or_1(moldesc)
