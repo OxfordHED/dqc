@@ -26,6 +26,7 @@ def get_linear(a: float):
 class FunctionXC(CustomXC):
 
     def __init__(self, function: Callable, family: int):
+        super().__init__()
         self._family = family
         self._function = function
 
