@@ -37,7 +37,7 @@ def get_xc(xc_names: str | List[str]) -> BaseXC:
 
         new_xcstr = " + ".join(
             comp if comp.startswith("fn_")
-            else f"get_libxc({comp})"
+            else f"get_libxc('{comp}')"
             for comp in components
         )
 
