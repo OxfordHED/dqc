@@ -54,7 +54,7 @@ def get_xc(xc_names: str | List[str]) -> BaseXC:
                 comp_parts = comp.split("*")
                 comp_parts = [
                     cp if is_number(cp.strip())
-                    else map_libxc_or_fnxc(cp)
+                    else map_libxc_or_fnxc(cp.strip())
                     for cp in comp_parts
                 ]
                 formatted_components.append("*".join(comp_parts))
