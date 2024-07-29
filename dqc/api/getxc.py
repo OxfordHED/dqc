@@ -59,7 +59,7 @@ def get_xc(xc_names: str | List[str]) -> BaseXC:
                 ]
                 formatted_components.append("*".join(comp_parts))
             else:
-                formatted_components.append(comp)
+                formatted_components.append(map_libxc_or_fnxc(comp))
 
         new_xcstr = " + ".join(formatted_components)
 
