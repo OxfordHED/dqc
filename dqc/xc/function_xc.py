@@ -9,13 +9,13 @@ from dqc.xc.custom_xc import CustomXC
 
 
 
-def get_linear(a: float):
+def get_linear(a: float, b: float = 0):
 
     def linear_xc(densinfo):
         if isinstance(densinfo, ValGrad):
-            return a * densinfo.value
+            return a * densinfo.value + b
         elif isinstance(densinfo, SpinParam):
-            return a * (densinfo.u.value + densinfo.d.value)
+            return a * (densinfo.u.value + densinfo.d.value) + b
         else:
             raise NotImplementedError("XC function not implemented for data type of densinfo.")
 
