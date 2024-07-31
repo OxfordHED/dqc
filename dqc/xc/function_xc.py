@@ -6,6 +6,7 @@ import torch
 
 from dqc.utils.datastruct import ValGrad, SpinParam
 from dqc.xc.custom_xc import CustomXC
+from dqc.xc.base_xc import ZeroXC
 from dqc.xc.libxc import get_libxc
 
 
@@ -36,7 +37,7 @@ def gaussian_distortion(
 
 
     def distorted_xc(densinfo):
-        baseline_model = sum(get_libxc(comp.strip()) for comp in baseline.split("+"))
+        baseline_model = sum([get_libxc(comp.strip()) for comp in baseline.split("+")], start=ZeroXC)
         base_xc = baseline_model.get_edensityxc(densinfo)
         if isinstance(densinfo, ValGrad):
             distortion = gaussian(densinfo.value, mean, amplitude, sigma)
