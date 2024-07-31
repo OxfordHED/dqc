@@ -37,7 +37,7 @@ def gaussian_distortion(
 
 
     def distorted_xc(densinfo):
-        baseline_model = sum([get_libxc(comp.strip()) for comp in baseline.split("+")], start=ZeroXC)
+        baseline_model = sum([get_libxc(comp.strip()) for comp in baseline.split("+")], start=ZeroXC())
         base_xc = baseline_model.get_edensityxc(densinfo)
         if isinstance(densinfo, ValGrad):
             distortion = gaussian(densinfo.value, mean, amplitude, sigma)
