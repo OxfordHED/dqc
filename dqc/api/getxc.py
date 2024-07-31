@@ -64,7 +64,11 @@ def get_xc(xc_names: str | List[str]) -> BaseXC:
         new_xcstr = " + ".join(formatted_components)
 
         # evaluate the expression and return the xc
-        glob = {"get_libxc": get_libxc, "fn_linear": function_xc.get_linear}
+        glob = {
+            "get_libxc": get_libxc,
+            "fn_linear": function_xc.get_linear,
+            "fn_gauss": function_xc.gaussian_distortion
+        }
         return eval(new_xcstr, glob)
     else:
         xc_sum = get_libxc(xc_names[0])

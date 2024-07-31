@@ -6,6 +6,7 @@ import torch
 
 from dqc.utils.datastruct import ValGrad, SpinParam
 from dqc.xc.custom_xc import CustomXC
+from dqc.xc.libxc import get_libxc
 
 
 
@@ -22,6 +23,28 @@ def get_linear(a: float, b: float = 0):
     return FunctionXC(linear_xc, 1)
 
 
+def gaussian_distortion(
+    mean: float,
+    amplitude: float,
+    sigma: float = 1.0,
+    baseline: str = "lda_x + lda_c_pw"
+):
+
+
+    def gaussian(x: torch.Tensor, mu: float, amp: float, sig: float = 1.0):
+        return amp * torch.exp(-0.5 * ((x - mu) / sig)**2) / torch.sqrt(2 * torch.pi * sig)
+
+
+    def distorted_xc(densinfo):
+        baseline_model = get_libxc(baseline)
+        base_xc = baseline_model.get_edensityxc(densinfo)
+        if isinstance(densinfo, ValGrad):
+            distortion = gaussian(densinfo.value, mean, amplitude, sigma)
+        else:
+            distortion = gaussian(densinfo.u.value + densinfo.d.value, mean, amplitude, sigma)
+        return distortion * base_xc
+
+    return FunctionXC(distorted_xc, 1)
 
 class FunctionXC(CustomXC):
 
