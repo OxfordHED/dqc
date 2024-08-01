@@ -33,7 +33,7 @@ def gaussian_distortion(
 
 
     def gaussian(x: torch.Tensor, mu: float, amp: float, sig: float = 1.0):
-        return amp * torch.exp(-0.5 * ((x - mu) / sig)**2) / (2 * torch.pi * sig)**0.5
+        return amp * torch.exp(-0.5 * ((x - mu) / sig)**2)
 
 
     def distorted_xc(densinfo):
