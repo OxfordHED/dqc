@@ -27,6 +27,7 @@ class SCF_QCCalc(BaseQCCalc):
     """
 
     def __init__(self, engine: BaseSCFEngine, variational: bool = False):
+        self.density_hist = None
         self._engine = engine
         self._polarized = engine.polarized
         self._shape = self._engine.shape
@@ -41,7 +42,8 @@ class SCF_QCCalc(BaseQCCalc):
     def run(self, dm0: Optional[Union[str, torch.Tensor, SpinParam[torch.Tensor]]] = "1e",  # type: ignore
             eigen_options: Optional[Dict[str, Any]] = None,
             fwd_options: Optional[Dict[str, Any]] = None,
-            bck_options: Optional[Dict[str, Any]] = None) -> BaseQCCalc:
+            bck_options: Optional[Dict[str, Any]] = None,
+            return_history: bool = False) -> BaseQCCalc:
 
         # get default options
         if not self._variational:
@@ -106,14 +108,23 @@ class SCF_QCCalc(BaseQCCalc):
             scp0 = self._engine.dm2scp(dm)
 
             # do the self-consistent iteration
-            scp = xitorch.optimize.equilibrium(
+            sc_result = xitorch.optimize.equilibrium(
                 fcn=self._engine.scp2scp,
                 y0=scp0,
                 bck_options={**bck_options},
+                return_history=return_history,
                 **fwd_options)
 
-            # post-process parameters
-            self._dm = self._engine.scp2dm(scp)
+            if isinstance(sc_result, tuple):
+                scp, density_history = sc_result
+                # post-process parameters
+                self._dm = self._engine.scp2dm(scp)
+                self.density_hist = [self._engine.scp2dm(dens) for dens in density_history]
+            else:
+                scp = sc_result
+                # post-process parameters
+                self._dm = self._engine.scp2dm(scp)
+
         else:
             system = self.get_system()
             h = system.get_hamiltonian()
@@ -214,6 +225,11 @@ class SCF_QCCalc(BaseQCCalc):
             dm0_d = torch.zeros(self._shape, dtype=self.dtype,
                                 device=self.device)
             return SpinParam(u=dm0_u, d=dm0_d)
+
+    def get_density_hist(self) -> List[torch.Tensor]:
+        # get list of densities from each iteration of the SC cycle in form of dm
+        assert self._has_run
+        return self.density_hist
 
 class BaseSCFEngine(xt.EditableModule):
     @abstractproperty
