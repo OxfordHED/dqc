@@ -226,7 +226,7 @@ class SCF_QCCalc(BaseQCCalc):
                                 device=self.device)
             return SpinParam(u=dm0_u, d=dm0_d)
 
-    def get_density_hist(self) -> list[torch.Tensor]:
+    def get_density_hist(self) -> None | list[torch.Tensor]:
         # get list of densities from each iteration of the self-consistency cycle in form of dm
         assert self._has_run
         return self.density_hist
