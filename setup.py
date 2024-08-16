@@ -57,7 +57,7 @@ setup(
         "h5py==3.1.0",  # temporary == because pyscf 1.7.6 is not compatible to 3.4.0
         "pylibxc2>=6.0.0",
         "dqclibs>=0.1.0",
-        "xitorch @ git+https://github.com/d0d00/xitorch.git",
+        "xitorch @ git+https://github.com/OxfordHED/xitorch.git",
         "torch>=1.8",  # ideally the nightly build
     ],
     classifiers=[
