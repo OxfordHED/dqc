@@ -117,13 +117,12 @@ class SCF_QCCalc(BaseQCCalc):
 
             if isinstance(sc_result, tuple):
                 scp, scp_history = sc_result
-                # post-process parameters
-                self._dm = self._engine.scp2dm(scp)
                 self.density_hist = [self._engine.scp2dm(x) for x in scp_history]
             else:
                 scp = sc_result
-                # post-process parameters
-                self._dm = self._engine.scp2dm(scp)
+
+            # post-process parameters
+            self._dm = self._engine.scp2dm(scp)
 
         else:
             system = self.get_system()
