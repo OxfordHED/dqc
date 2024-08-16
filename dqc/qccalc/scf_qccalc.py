@@ -116,10 +116,10 @@ class SCF_QCCalc(BaseQCCalc):
                 **fwd_options)
 
             if isinstance(sc_result, tuple):
-                scp, density_history = sc_result
+                scp, scp_history = sc_result
                 # post-process parameters
                 self._dm = self._engine.scp2dm(scp)
-                self.density_hist = [self._engine.scp2dm(dens) for dens in density_history]
+                self.density_hist = [self._engine.scp2dm(dens) for dens in scp_history]
             else:
                 scp = sc_result
                 # post-process parameters
@@ -226,8 +226,8 @@ class SCF_QCCalc(BaseQCCalc):
                                 device=self.device)
             return SpinParam(u=dm0_u, d=dm0_d)
 
-    def get_density_hist(self) -> List[torch.Tensor]:
-        # get list of densities from each iteration of the SC cycle in form of dm
+    def get_density_hist(self) -> list[torch.Tensor]:
+        # get list of densities from each iteration of the self-consistency cycle in form of dm
         assert self._has_run
         return self.density_hist
 
