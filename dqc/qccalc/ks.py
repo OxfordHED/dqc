@@ -38,7 +38,7 @@ class KS(SCF_QCCalc):
                  restricted: Optional[bool] = None,
                  variational: bool = False):
 
-        engine = _KSEngine(system, xc)
+        engine = _KSEngine(system, xc, restricted)
         super().__init__(engine, variational)
 
 class _KSEngine(BaseSCFEngine):
