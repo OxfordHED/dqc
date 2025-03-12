@@ -57,5 +57,5 @@ class BaseGrid(xt.EditableModule):
         pass
 
     @abstractmethod
-    def generate_graph(self, graph_method: str, sparse: bool = False) -> torch.Tensor:
+    def generate_graph(self, graph_method: str, sparse: bool = False, **kwargs) -> torch.Tensor:
         pass
