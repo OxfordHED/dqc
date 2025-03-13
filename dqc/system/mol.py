@@ -59,21 +59,6 @@ class MolEmbedding:
             dens = densinfo.value
             zeta = torch.zeros_like(dens)
 
-        # if dens.shape[0] < self._radial_dists.shape[0]:
-        #     # Todo: decide whether this dirty fix is reasonable
-        #     # Assume chunked densinfo
-        #     radial_dists_range = self._radial_dists[
-        #         self._chunk_tracker : self._chunk_tracker + dens.shape[0]
-        #     ]
-        #     atom_zs_range = self.atom_zs[
-        #         self._chunk_tracker : self._chunk_tracker + dens.shape[0]
-        #     ]
-        #     self._chunk_tracker += dens.shape[0]
-        #     self._chunk_tracker = self._chunk_tracker % self._radial_dists.shape[0]
-        # else:
-        #     radial_dists_range = self._radial_dists
-        #     atom_zs_range = self.atom_zs
-        print(dens.shape)
         return torch.stack([dens, zeta, self._radial_dists, self._atom_zs], dim=-1)
 
 
