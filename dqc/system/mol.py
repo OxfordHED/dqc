@@ -45,7 +45,8 @@ class MolEmbedding:
         ]
         self._radial_dists = torch.cat(radial_dists, dim=0)
         len_subgrids = torch.tensor([rg.shape[0] for rg in radial_dists])
-        self.atom_zs = torch.repeat_interleave(mol.atomzs, len_subgrids)
+        self._atom_zs = torch.repeat_interleave(mol.atomzs, len_subgrids)
+        self._chunk_tracker = 0
         del grid._atomgrids
 
     def apply(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
@@ -58,8 +59,21 @@ class MolEmbedding:
             dens = densinfo.value
             zeta = torch.zeros_like(dens)
 
-        print(dens.shape)
-        return torch.stack([dens, zeta, self._radial_dists, self.atom_zs], dim=-1)
+        # if dens.shape[0] < self._radial_dists.shape[0]:
+        #     # Todo: decide whether this dirty fix is reasonable
+        #     # Assume chunked densinfo
+        #     radial_dists_range = self._radial_dists[
+        #         self._chunk_tracker : self._chunk_tracker + dens.shape[0]
+        #     ]
+        #     atom_zs_range = self.atom_zs[
+        #         self._chunk_tracker : self._chunk_tracker + dens.shape[0]
+        #     ]
+        #     self._chunk_tracker += dens.shape[0]
+        #     self._chunk_tracker = self._chunk_tracker % self._radial_dists.shape[0]
+        # else:
+        #     radial_dists_range = self._radial_dists
+        #     atom_zs_range = self.atom_zs
+        return torch.stack([dens, zeta, self._radial_dists, self._atom_zs], dim=-1)
 
 
 class Mol(BaseSystem):

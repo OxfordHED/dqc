@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     embedding = mol.get_embedding()
 
-    plt.plot(embedding.atom_zs)
+    plt.plot(embedding._atom_zs)
     plt.show()
 
     plt.plot(embedding._radial_dists)
