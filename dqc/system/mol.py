@@ -131,7 +131,7 @@ class Mol(BaseSystem):
         vext: Optional[torch.Tensor] = None,
         dtype: torch.dtype = torch.float64,
         device: torch.device = torch.device("cpu"),
-        graph: str | None = None,
+        graph: str | torch.Tensor | None = None,
         graph_kwargs: dict[str, Any] | None = None,
         grid_params: dict | None = None,
     ):
@@ -144,6 +144,7 @@ class Mol(BaseSystem):
         self._vext = vext
         self._graph = graph
         self._graph_kwargs = graph_kwargs or {}
+        self._embedding = None
 
         # make efield a tuple
         self._efield = _normalize_efield(efield)
@@ -340,8 +341,10 @@ class Mol(BaseSystem):
         self._grid = get_predefined_grid(
             self._grid_inp, self._atomzs_int, self._atompos, **kwargs
         )
-        if self._graph is not None:
+        if isinstance(self._graph, str):
             self._grid.generate_graph(self._graph, **self._graph_kwargs)
+        elif isinstance(self._graph, torch.Tensor):
+            self._grid._graph = self._graph
         logger.log("Constructing the integration grid: done")
 
         # #        0,  1,  2,  3,  4,  5
@@ -370,7 +373,9 @@ class Mol(BaseSystem):
         return self._grid.graph
 
     def get_embedding(self) -> MolEmbedding:
-        return MolEmbedding(self)
+        if self._embedding is None:
+            self._embedding = MolEmbedding(self)
+        return self._embedding
 
     def requires_grid(self) -> bool:
         req_grid = self._vext is not None

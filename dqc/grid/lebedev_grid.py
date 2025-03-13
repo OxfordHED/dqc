@@ -48,7 +48,7 @@ class LebedevLoader(object):
                 "lebedev_%03d.txt" % prec,
             )
             if os.path.exists(dist_path):
-                distances = np.loadtxt(dist_path)
+                distances = torch.tensor(np.loadtxt(dist_path))
             else:
                 lebedev_dsets = cls.load(prec)
                 lat_long = torch.tensor(lebedev_dsets[:, :2], dtype=torch.float64)
@@ -59,7 +59,7 @@ class LebedevLoader(object):
                     haversine_distances(lat_long), dtype=torch.float64
                 ) + 100 * torch.eye(lat_long.shape[0], dtype=torch.float64)
                 np.savetxt(dist_path, distances.numpy())
-            cls.distance_caches[prec] = torch.tensor(distances).clone().detach()
+            cls.distance_caches[prec] = distances
 
         return cls.distance_caches[prec]
 
