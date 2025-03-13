@@ -42,8 +42,7 @@ class LebedevLoader(object):
         # Todo: cache these in files more long-term
         if prec not in cls.distance_caches:
             dist_path = os.path.join(
-                os.path.split(__file__)[0],
-                "..",
+                os.path.dirname(os.path.dirname(__file__)),
                 "datasets",
                 "lebedevdists",
                 "lebedev_%03d.txt" % prec,
