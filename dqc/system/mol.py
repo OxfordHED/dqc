@@ -58,8 +58,8 @@ class MolEmbedding:
             dens = densinfo.value
             zeta = torch.zeros_like(dens)
 
-        if len(dens.value.shape) > 1:
-            print(dens.value.shape)
+        if len(dens.shape) > 1:
+            print(dens.shape)
 
         return torch.stack([dens, zeta, self._radial_dists, self.atom_zs], dim=-1)
 
