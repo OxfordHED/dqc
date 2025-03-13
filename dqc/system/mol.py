@@ -73,6 +73,7 @@ class MolEmbedding:
         # else:
         #     radial_dists_range = self._radial_dists
         #     atom_zs_range = self.atom_zs
+        print(dens.shape)
         return torch.stack([dens, zeta, self._radial_dists, self._atom_zs], dim=-1)
 
 

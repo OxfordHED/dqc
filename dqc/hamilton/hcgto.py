@@ -459,10 +459,7 @@ class HamiltonCGTO(BaseHamilton):
             )
 
         # It is faster to split into chunks than evaluating a single big chunk
-        if getattr(self.xc, "graph_based", False):
-            maxnumel = self.basis.shape[-2]
-        else:
-            maxnumel = config.CHUNK_MEMORY // get_dtype_memsize(self.basis)
+        maxnumel = config.CHUNK_MEMORY // get_dtype_memsize(self.basis)
         for basis, ioff, iend in chunkify(self.basis, dim=0, maxnumel=maxnumel):
             # basis: (ngrid2, nao)
 
