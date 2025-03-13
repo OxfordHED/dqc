@@ -58,6 +58,9 @@ class MolEmbedding:
             dens = densinfo.value
             zeta = torch.zeros_like(dens)
 
+        if len(dens.value.shape) > 1:
+            print(dens.value.shape)
+
         return torch.stack([dens, zeta, self._radial_dists, self.atom_zs], dim=-1)
 
 
@@ -333,7 +336,8 @@ class Mol(BaseSystem):
         return q_by_r.sum() * 0.5
 
     def setup_grid(self) -> None:
-        grid_inp = self._grid_inp
+        if self._grid is not None:
+            return self._grid
         logger.log("Constructing the integration grid")
         kwargs = {"dtype": self._dtype, "device": self._device}
         if self._grid_params is not None:
@@ -346,17 +350,6 @@ class Mol(BaseSystem):
         elif isinstance(self._graph, torch.Tensor):
             self._grid._graph = self._graph
         logger.log("Constructing the integration grid: done")
-
-        # #        0,  1,  2,  3,  4,  5
-        # nr   = [20, 40, 60, 75, 100, 125][grid_inp]
-        # prec = [13, 17, 21, 29, 41, 59][grid_inp]
-        # radgrid = RadialGrid(nr, "chebyshev", "logm3",
-        #                      dtype=self._dtype, device=self._device)
-        # sphgrid = LebedevGrid(radgrid, prec=prec)
-        #
-        # natoms = self._atompos.shape[-2]
-        # sphgrids = [sphgrid for _ in range(natoms)]
-        # self._grid = BeckeGrid(sphgrids, self._atompos)
 
     def get_grid(self) -> BaseGrid:
         if self._grid is None:
