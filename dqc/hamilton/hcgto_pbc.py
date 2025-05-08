@@ -469,7 +469,7 @@ class HamiltonCGTO_PBC(HamiltonCGTO):
 
         # dens: (*BD, ngrid)
         # gdens: (*BD, ndim, ngrid)
-        res = ValGrad(value=dens, grad=gdens, lapl=lapldens, kin=kindens)
+        res = ValGrad(value=dens, grad=gdens, lapl=lapldens, kin=kindens, grid=self.grid)
         return res
 
     def _get_dens_at_grid(self, dm: torch.Tensor) -> torch.Tensor:

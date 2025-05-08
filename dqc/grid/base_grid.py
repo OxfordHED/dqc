@@ -17,6 +17,10 @@ class BaseGrid(xt.EditableModule):
         pass
 
     @abstractproperty
+    def graph(self) -> torch.Tensor:
+        pass
+
+    @abstractproperty
     def coord_type(self) -> str:
         """
         Returns the type of the coordinate returned in get_rgrid
@@ -50,4 +54,8 @@ class BaseGrid(xt.EditableModule):
 
     @abstractmethod
     def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
+        pass
+
+    @abstractmethod
+    def generate_graph(self, graph_method: str, sparse: bool = False, **kwargs) -> torch.Tensor:
         pass

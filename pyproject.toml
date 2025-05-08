@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "dqc"
+version = "0.1.0"
+description = ""
+authors = ["Karim Alaa El-Din <karim@aedin.dev>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12"
+xitorch = "^0.5.1"
+dqclibs = "^0.1.0"
+pylibxc2 = "^6.0.0"
+h5py = "3.1.0"
+basis-set-exchange = "^0.9.1"
+matplotlib = "3.7.3"
+torch = ">=2.0.0"
+scikit-learn = "^1.4.1.post1"
+networkx = "^3.2"
+ruff = "^0.9.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

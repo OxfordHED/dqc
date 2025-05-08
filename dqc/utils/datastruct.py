@@ -4,6 +4,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional, Union, List, TypeVar, Generic, Callable, overload, Dict
 from dqc.utils.misc import gaussian_int
+from dqc.grid.base_grid import BaseGrid
 
 __all__ = ["CGTOBasis", "AtomCGTOBasis", "ValGrad", "ZType", "is_z_float",
            "BasisInpType", "DensityFitInfo", "SpinParam"]
@@ -163,13 +164,16 @@ class ValGrad:
     # ``(..., 3)``
     lapl: Optional[torch.Tensor] = None  # torch.Tensor of the laplace of the value
     kin: Optional[torch.Tensor] = None  # torch.Tensor of the kinetic energy density
+    grid: BaseGrid | None = None  # torch.Tensor of the grid
 
     def __add__(self, b: ValGrad) -> ValGrad:
+        assert self.grid == b.grid
         return ValGrad(
             value=self.value + b.value,
             grad=self.grad + b.grad if self.grad is not None else None,
             lapl=self.lapl + b.lapl if self.lapl is not None else None,
             kin=self.kin + b.kin if self.kin is not None else None,
+            grid=self.grid,
         )
 
     def __mul__(self, f: Union[float, int, torch.Tensor]) -> ValGrad:
@@ -181,6 +185,7 @@ class ValGrad:
             grad=self.grad * f if self.grad is not None else None,
             lapl=self.lapl * f if self.lapl is not None else None,
             kin=self.kin * f if self.kin is not None else None,
+            grid=self.grid,
         )
 
 
