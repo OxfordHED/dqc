@@ -81,7 +81,8 @@ class _KSEngine(BaseSCFEngine):
             system.setup_grid()
             kwargs = {}
             if system._graph is not None:
-                kwargs["graph"] = system.get_graph()
+                # Todo: figure out where to transpose
+                kwargs["graph"] = system.get_graph().T
                 kwargs["embed"] = system.get_embedding()
             self.hamilton.setup_grid(system.get_grid(), self.xc, **kwargs)
 
