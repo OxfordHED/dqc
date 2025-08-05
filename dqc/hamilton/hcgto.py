@@ -1,6 +1,5 @@
 from typing import List, Optional, Union, overload, Tuple, Type
 import warnings
-import logging
 import torch
 import xitorch as xt
 import dqc.hamilton.intor as intor
@@ -317,7 +316,6 @@ class HamiltonCGTO(BaseHamilton):
         if self._graph is not None or self._embed is not None:
             kwargs["embed"] = self._embed
             kwargs["graph"] = self._graph
-            logging.info(kwargs)
         potinfo = self.xc.get_vxc(densinfo, **kwargs)  # value: (*BD, nr)
         vxc_linop = SpinParam.apply_fcn(
             lambda potinfo_: self._get_vxc_from_potinfo(potinfo_), potinfo
