@@ -7,11 +7,13 @@ import xitorch as xt
 from typing import List, Union, overload, Iterator
 from dqc.utils.datastruct import ValGrad, SpinParam
 
+
 class BaseXC(xt.EditableModule):
     """
     XC is class that calculates the components of xc potential and energy
     density given the density.
     """
+
     @abstractproperty
     def family(self) -> int:
         """
@@ -20,8 +22,9 @@ class BaseXC(xt.EditableModule):
         pass
 
     @abstractmethod
-    def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> \
-            torch.Tensor:
+    def get_edensityxc(
+        self, densinfo: Union[ValGrad, SpinParam[ValGrad]]
+    ) -> torch.Tensor:
         """
         Returns the xc energy density (energy per unit volume)
         """
@@ -31,14 +34,12 @@ class BaseXC(xt.EditableModule):
         pass
 
     @overload
-    def get_vxc(self, densinfo: ValGrad) -> ValGrad:
-        ...
+    def get_vxc(self, densinfo: ValGrad) -> ValGrad: ...
 
     @overload
-    def get_vxc(self, densinfo: SpinParam[ValGrad]) -> SpinParam[ValGrad]:
-        ...
+    def get_vxc(self, densinfo: SpinParam[ValGrad]) -> SpinParam[ValGrad]: ...
 
-    def get_vxc(self, densinfo):
+    def get_vxc(self, densinfo, embed=None, graph=None):
         """
         Returns the ValGrad for the xc potential given the density info
         for unpolarized case.
@@ -52,10 +53,15 @@ class BaseXC(xt.EditableModule):
         # potentialinfo.value & lapl: (*BD, nr)
         # potentialinfo.grad: (*BD, ndim, nr)
 
+        kwargs = {}
+        if embed is not None or graph is not None:
+            kwargs["embed"] = embed
+            kwargs["graph"] = graph
+
         # mark the densinfo components as requiring grads
         with self._enable_grad_densinfo(densinfo):
             with torch.enable_grad():
-                edensity = self.get_edensityxc(densinfo)  # (*BD, nr)
+                edensity = self.get_edensityxc(densinfo, **kwargs)  # (*BD, nr)
             grad_outputs = torch.ones_like(edensity)
             grad_enabled = torch.is_grad_enabled()
 
@@ -63,24 +69,53 @@ class BaseXC(xt.EditableModule):
                 if self.family == 1:  # LDA
                     params = (densinfo.u.value, densinfo.d.value)
                     dedn_u, dedn_d = torch.autograd.grad(
-                        edensity, params, create_graph=grad_enabled, grad_outputs=grad_outputs)
+                        edensity,
+                        params,
+                        create_graph=grad_enabled,
+                        grad_outputs=grad_outputs,
+                    )
 
                     return SpinParam(u=ValGrad(value=dedn_u), d=ValGrad(value=dedn_d))
 
                 elif self.family == 2:  # GGA
-                    params = (densinfo.u.value, densinfo.d.value, densinfo.u.grad, densinfo.d.grad)
+                    params = (
+                        densinfo.u.value,
+                        densinfo.d.value,
+                        densinfo.u.grad,
+                        densinfo.d.grad,
+                    )
                     dedn_u, dedn_d, dedg_u, dedg_d = torch.autograd.grad(
-                        edensity, params, create_graph=grad_enabled, grad_outputs=grad_outputs)
+                        edensity,
+                        params,
+                        create_graph=grad_enabled,
+                        grad_outputs=grad_outputs,
+                    )
 
                     return SpinParam(
                         u=ValGrad(value=dedn_u, grad=dedg_u),
-                        d=ValGrad(value=dedn_d, grad=dedg_d))
+                        d=ValGrad(value=dedn_d, grad=dedg_d),
+                    )
 
                 elif self.family == 4:
-                    params = (densinfo.u.value, densinfo.d.value, densinfo.u.grad, densinfo.d.grad,
-                              densinfo.u.lapl, densinfo.d.lapl, densinfo.u.kin, densinfo.d.kin)
-                    dedn_u, dedn_d, dedg_u, dedg_d, dedl_u, dedl_d, dedk_u, dedk_d = torch.autograd.grad(
-                        edensity, params, create_graph=grad_enabled, grad_outputs=grad_outputs, allow_unused=True)
+                    params = (
+                        densinfo.u.value,
+                        densinfo.d.value,
+                        densinfo.u.grad,
+                        densinfo.d.grad,
+                        densinfo.u.lapl,
+                        densinfo.d.lapl,
+                        densinfo.u.kin,
+                        densinfo.d.kin,
+                    )
+                    dedn_u, dedn_d, dedg_u, dedg_d, dedl_u, dedl_d, dedk_u, dedk_d = (
+                        torch.autograd.grad(
+                            edensity,
+                            params,
+                            create_graph=grad_enabled,
+                            grad_outputs=grad_outputs,
+                            allow_unused=True,
+                        )
+                    )
 
                     # mgga might only use one of either lapl or kin, so we need to change the deriv manually to 0s
                     dedl_u = dedl_u if dedl_u is not None else torch.zeros_like(dedn_u)
@@ -90,32 +125,44 @@ class BaseXC(xt.EditableModule):
 
                     return SpinParam(
                         u=ValGrad(value=dedn_u, grad=dedg_u, lapl=dedl_u, kin=dedk_u),
-                        d=ValGrad(value=dedn_d, grad=dedg_d, lapl=dedl_d, kin=dedk_d))
+                        d=ValGrad(value=dedn_d, grad=dedg_d, lapl=dedl_d, kin=dedk_d),
+                    )
 
                 else:
                     raise NotImplementedError(
-                        "Default polarized vxc for family %s is not implemented" % self.family)
+                        "Default polarized vxc for family %s is not implemented"
+                        % self.family
+                    )
 
             else:  # unpolarized case
                 if self.family == 1:  # LDA
-                    dedn, = torch.autograd.grad(
-                        edensity, densinfo.value, create_graph=grad_enabled,
-                        grad_outputs=grad_outputs)
+                    (dedn,) = torch.autograd.grad(
+                        edensity,
+                        densinfo.value,
+                        create_graph=grad_enabled,
+                        grad_outputs=grad_outputs,
+                    )
 
                     return ValGrad(value=dedn)
 
                 elif self.family == 2:  # GGA
                     dedn, dedg = torch.autograd.grad(
-                        edensity, (densinfo.value, densinfo.grad), create_graph=grad_enabled,
-                        grad_outputs=grad_outputs)
+                        edensity,
+                        (densinfo.value, densinfo.grad),
+                        create_graph=grad_enabled,
+                        grad_outputs=grad_outputs,
+                    )
 
                     return ValGrad(value=dedn, grad=dedg)
 
                 elif self.family == 4:  # MGGA
                     dedn, dedg, dedl, dedk = torch.autograd.grad(
-                        edensity, (densinfo.value, densinfo.grad, densinfo.lapl, densinfo.kin),
-                        create_graph=grad_enabled, grad_outputs=grad_outputs,
-                        allow_unused=True)
+                        edensity,
+                        (densinfo.value, densinfo.grad, densinfo.lapl, densinfo.kin),
+                        create_graph=grad_enabled,
+                        grad_outputs=grad_outputs,
+                        allow_unused=True,
+                    )
 
                     # mgga might only use one of either lapl or kin, so we need to change the deriv manually to 0s
                     dedl = dedl if dedl is not None else torch.zeros_like(dedn)
@@ -124,7 +171,9 @@ class BaseXC(xt.EditableModule):
                     return ValGrad(value=dedn, grad=dedg, lapl=dedl, kin=dedk)
 
                 else:
-                    raise NotImplementedError("Default vxc for family %d is not implemented" % self.family)
+                    raise NotImplementedError(
+                        "Default vxc for family %d is not implemented" % self.family
+                    )
 
     def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
         if methodname == "get_vxc":
@@ -133,7 +182,9 @@ class BaseXC(xt.EditableModule):
             raise KeyError("Unknown methodname: %s" % methodname)
 
     @contextmanager
-    def _enable_grad_densinfo(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> Iterator:
+    def _enable_grad_densinfo(
+        self, densinfo: Union[ValGrad, SpinParam[ValGrad]]
+    ) -> Iterator:
         # set the context where some elements (depends on xc family) in densinfo requires grad
 
         def _get_set_grad(vars: List[torch.Tensor]) -> List[bool]:
@@ -163,7 +214,9 @@ class BaseXC(xt.EditableModule):
                 assert densinfo.d.lapl is not None
                 assert densinfo.u.kin is not None
                 assert densinfo.d.kin is not None
-                params.extend([densinfo.u.lapl, densinfo.d.lapl, densinfo.u.kin, densinfo.d.kin])
+                params.extend(
+                    [densinfo.u.lapl, densinfo.d.lapl, densinfo.u.kin, densinfo.d.kin]
+                )
         else:
             params = [densinfo.value]
             if self.family >= 2:
@@ -196,6 +249,7 @@ class BaseXC(xt.EditableModule):
     def __rmul__(self, other: Union[float, int, torch.Tensor]):
         return self.__mul__(other)
 
+
 class AddBaseXC(BaseXC):
     def __init__(self, a: BaseXC, b: BaseXC) -> None:
         self.a = a
@@ -207,12 +261,10 @@ class AddBaseXC(BaseXC):
         return self._family
 
     @overload
-    def get_vxc(self, densinfo: ValGrad) -> ValGrad:
-        ...
+    def get_vxc(self, densinfo: ValGrad) -> ValGrad: ...
 
     @overload
-    def get_vxc(self, densinfo: SpinParam[ValGrad]) -> SpinParam[ValGrad]:
-        ...
+    def get_vxc(self, densinfo: SpinParam[ValGrad]) -> SpinParam[ValGrad]: ...
 
     def get_vxc(self, densinfo):
         avxc = self.a.get_vxc(densinfo)
@@ -223,13 +275,16 @@ class AddBaseXC(BaseXC):
         else:
             return SpinParam(u=avxc.u + bvxc.u, d=avxc.d + bvxc.d)
 
-    def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> \
-            torch.Tensor:
+    def get_edensityxc(
+        self, densinfo: Union[ValGrad, SpinParam[ValGrad]]
+    ) -> torch.Tensor:
         return self.a.get_edensityxc(densinfo) + self.b.get_edensityxc(densinfo)
 
     def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
-        return self.a.getparamnames(methodname, prefix=prefix + "a.") + \
-            self.b.getparamnames(methodname, prefix=prefix + "b.")
+        return self.a.getparamnames(
+            methodname, prefix=prefix + "a."
+        ) + self.b.getparamnames(methodname, prefix=prefix + "b.")
+
 
 class MulBaseXC(BaseXC):
     def __init__(self, a: BaseXC, b: Union[float, torch.Tensor]) -> None:
@@ -244,12 +299,10 @@ class MulBaseXC(BaseXC):
         return self.a.family
 
     @overload
-    def get_vxc(self, densinfo: ValGrad) -> ValGrad:
-        ...
+    def get_vxc(self, densinfo: ValGrad) -> ValGrad: ...
 
     @overload
-    def get_vxc(self, densinfo: SpinParam[ValGrad]) -> SpinParam[ValGrad]:
-        ...
+    def get_vxc(self, densinfo: SpinParam[ValGrad]) -> SpinParam[ValGrad]: ...
 
     def get_vxc(self, densinfo):
         avxc = self.a.get_vxc(densinfo)
@@ -259,8 +312,9 @@ class MulBaseXC(BaseXC):
         else:
             return SpinParam(u=avxc.u * self.b, d=avxc.d * self.b)
 
-    def get_edensityxc(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> \
-            torch.Tensor:
+    def get_edensityxc(
+        self, densinfo: Union[ValGrad, SpinParam[ValGrad]]
+    ) -> torch.Tensor:
         return self.a.get_edensityxc(densinfo) * self.b
 
     def getparamnames(self, methodname: str, prefix: str = "") -> List[str]:
@@ -271,7 +325,6 @@ class MulBaseXC(BaseXC):
 
 
 class ZeroXC(BaseXC):
-
     family = 0
 
     def get_edensityxc(self, densinfo: ValGrad | SpinParam[ValGrad]) -> torch.Tensor:
