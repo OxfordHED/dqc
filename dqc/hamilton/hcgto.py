@@ -316,6 +316,7 @@ class HamiltonCGTO(BaseHamilton):
         if self._graph is not None or self._embed is not None:
             kwargs["embed"] = self._embed
             kwargs["graph"] = self._graph
+            logging.info(kwargs)
         potinfo = self.xc.get_vxc(densinfo, **kwargs)  # value: (*BD, nr)
         vxc_linop = SpinParam.apply_fcn(
             lambda potinfo_: self._get_vxc_from_potinfo(potinfo_), potinfo
