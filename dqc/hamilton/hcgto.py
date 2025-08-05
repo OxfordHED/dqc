@@ -15,7 +15,6 @@ from dqc.utils.cache import Cache
 from dqc.utils.mem import chunkify, get_dtype_memsize
 from dqc.utils.config import config
 from dqc.utils.misc import logger
-from dqc.system.mol import MolEmbedding
 
 
 class HamiltonCGTO(BaseHamilton):
@@ -175,7 +174,13 @@ class HamiltonCGTO(BaseHamilton):
 
         return self
 
-    def setup_grid(self, grid: BaseGrid, xc: Optional[BaseXC] = None, embed: Optional[MolEmbedding] = None, graph: Optional[torch.Tensor] = None) -> None:
+    def setup_grid(
+        self,
+        grid: BaseGrid,
+        xc: Optional[BaseXC] = None,
+        embed: Optional = None,
+        graph: Optional[torch.Tensor] = None,
+    ) -> None:
         # save the family and save the xc
         self.xc = xc
         if xc is None:
