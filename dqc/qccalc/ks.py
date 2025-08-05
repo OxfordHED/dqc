@@ -81,8 +81,8 @@ class _KSEngine(BaseSCFEngine):
             system.setup_grid()
             kwargs = {}
             if system._graph is not None:
-                kwargs["graph"] = system._graph
-                kwargs["embed"] = system._embedding
+                kwargs["graph"] = system.get_graph()
+                kwargs["embed"] = system.get_embedding()
             self.hamilton.setup_grid(system.get_grid(), self.xc, **kwargs)
 
         # get the HF engine and build the hamiltonian

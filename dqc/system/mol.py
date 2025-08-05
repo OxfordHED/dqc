@@ -577,9 +577,9 @@ def _preprocess_efield(
     for i in range(len(efs)):
         efi = efs[i]
         numel = 3 ** (i + 1)
-        assert (
-            efi.numel() == numel
-        ), f"The {i}-th tuple element of efield must have {numel} elements"
+        assert efi.numel() == numel, (
+            f"The {i}-th tuple element of efield must have {numel} elements"
+        )
 
         res_list.append(efi.reshape(-1))
 
