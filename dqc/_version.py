@@ -70,13 +70,21 @@ def get_version():
 
     # unreleased version
     else:
-        ngit_short = 7  # how many letters should be included from the git version
+        ngit_short = 7
         GIT_REVISION = _get_git_cmd(git_version)
         GIT_REVISION_SHORT = GIT_REVISION[:ngit_short]
         GIT_COUNT = _get_git_cmd(git_count)
-        num_int_git_short = len(str(int("f" * ngit_short, 16)))
-        git_rev_format = f"%0{num_int_git_short}d"
-        version = VERSION + ".dev" + GIT_COUNT + (git_rev_format % int(GIT_REVISION_SHORT, 16))
+        
+        # Handle case when git info is not available (e.g., installed from git via Poetry)
+        if GIT_REVISION_SHORT and GIT_COUNT and GIT_REVISION_SHORT != "Unknown":
+            try:
+                num_int_git_short = len(str(int("f" * ngit_short, 16)))
+                git_rev_format = f"%0{num_int_git_short}d"
+                version = VERSION + ".dev" + GIT_COUNT + (git_rev_format % int(GIT_REVISION_SHORT, 16))
+            except (ValueError, TypeError):
+                version = VERSION  # Fallback to base version
+        else:
+            version = VERSION  # Fallback to base version
 
     with open(fname, "w") as f:
         f.write(version)
