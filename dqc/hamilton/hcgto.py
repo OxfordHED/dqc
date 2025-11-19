@@ -88,6 +88,9 @@ class HamiltonCGTO(BaseHamilton):
         if self._df is None:
             self._cache.add_cacheable_params(["elrep"])
 
+        self._graph = None
+        self._embed = None
+
     @property
     def nao(self) -> int:
         return self._orthozer.nao()
@@ -171,13 +174,22 @@ class HamiltonCGTO(BaseHamilton):
 
         return self
 
-    def setup_grid(self, grid: BaseGrid, xc: Optional[BaseXC] = None) -> None:
+    def setup_grid(
+        self,
+        grid: BaseGrid,
+        xc: Optional[BaseXC] = None,
+        embed: Optional = None,
+        graph: Optional[torch.Tensor] = None,
+    ) -> None:
         # save the family and save the xc
         self.xc = xc
         if xc is None:
             self.xcfamily = 1
         else:
             self.xcfamily = xc.family
+
+        self._embed = embed
+        self._graph = graph
 
         # save the grid
         self.grid = grid
@@ -299,7 +311,12 @@ class HamiltonCGTO(BaseHamilton):
         densinfo = SpinParam.apply_fcn(
             lambda dm_: self._dm2densinfo(dm_), dm
         )  # value: (*BD, nr)
-        potinfo = self.xc.get_vxc(densinfo)  # value: (*BD, nr)
+
+        kwargs = {}
+        if self._graph is not None or self._embed is not None:
+            kwargs["embed"] = self._embed
+            kwargs["graph"] = self._graph
+        potinfo = self.xc.get_vxc(densinfo, **kwargs)  # value: (*BD, nr)
         vxc_linop = SpinParam.apply_fcn(
             lambda potinfo_: self._get_vxc_from_potinfo(potinfo_), potinfo
         )
@@ -370,7 +387,12 @@ class HamiltonCGTO(BaseHamilton):
         densinfo = SpinParam.apply_fcn(
             lambda dm_: self._dm2densinfo(dm_), dm
         )  # (spin) value: (*BD, nr)
-        edens = self.xc.get_edensityxc(densinfo)  # (*BD, nr)
+
+        kwargs = {}
+        if self._graph is not None or self._embed is not None:
+            kwargs["embed"] = self._embed
+            kwargs["graph"] = self._graph
+        edens = self.xc.get_edensityxc(densinfo, **kwargs)  # (*BD, nr)
 
         return torch.sum(self.grid.get_dvolume() * edens, dim=-1)
 

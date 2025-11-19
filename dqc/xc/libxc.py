@@ -49,6 +49,7 @@ class LibXCLDA(BaseXC):
     _polfcn_wrapper = CalcLDALibXCPol
 
     def __init__(self, name: str) -> None:
+        self.name = name
         self.libxc_unpol = pylibxc.LibXCFunctional(name, "unpolarized")
         self.libxc_pol = pylibxc.LibXCFunctional(name, "polarized")
 

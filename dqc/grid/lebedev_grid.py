@@ -76,9 +76,9 @@ class LebedevGrid(BaseGrid):
         self._nrad = radgrid.get_rgrid().shape[0]
         self._graph = None
 
-        assert (prec % 2 == 1) and (
-            3 <= prec <= 131
-        ), "Precision must be an odd number between 3 and 131"
+        assert (prec % 2 == 1) and (3 <= prec <= 131), (
+            "Precision must be an odd number between 3 and 131"
+        )
 
         # load the Lebedev grid points
         lebedev_dsets = torch.tensor(
@@ -141,13 +141,13 @@ class LebedevGrid(BaseGrid):
         graph_method: str = "grid_neighbours",
         sparse: bool = True,
         range_modifier: float = 0.85,
+        radial_edges: bool = True,
     ) -> torch.Tensor:
         # Todo: decide whether we should include self adjacency
 
         # Range modifier derived from average degree scan and different precisions
         if graph_method != "grid_neighbours":
             raise ValueError("Invalid graph method: %s" % graph_method)
-        # Todo: treat non-sparse case
         if not sparse:
             raise ValueError(
                 "Only sparse Lebedev graph is supported due to computational cost"
@@ -169,7 +169,7 @@ class LebedevGrid(BaseGrid):
 
         for i in range(nrad):
             constituent_graphs.append(shell_graph + i * nangs)
-            if i < nrad - 1:
+            if (i < nrad - 1) and radial_edges:
                 constituent_graphs.append(radial_edge_proto + i * nangs)
 
         self._graph = torch.cat(constituent_graphs, dim=0)
@@ -201,16 +201,17 @@ class TruncatedLebedevGrid(LebedevGrid):
         graph_method: str = "grid_neighbours",
         sparse: bool = True,
         range_modifier: float = 0.85,
+        radial_edges: bool = True,
     ) -> torch.Tensor:
         outer_last = None
         graph_edges = []
 
         running_counter = 0
         for i, grid in enumerate(self.lebedevs):
-            slice_graph = grid.generate_graph(graph_method, sparse, range_modifier)
+            slice_graph = grid.generate_graph(graph_method, sparse, range_modifier, radial_edges=radial_edges)
             points_per_shell = LebedevLoader.load(grid._prec).shape[0]
             inner = grid.get_rgrid()[:points_per_shell]
-            if i > 0:
+            if i > 0 and radial_edges:
                 dists = cdist(inner.numpy(), outer_last.numpy())
                 # Todo: currently this only picks neighbours in one direction. Do we want both?
                 min_indices = np.argmin(dists, axis=1)

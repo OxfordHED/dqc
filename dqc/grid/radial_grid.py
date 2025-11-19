@@ -7,6 +7,7 @@ from typing import Tuple, Union
 
 __all__ = ["RadialGrid", "SlicedRadialGrid"]
 
+
 class RadialGrid(BaseGrid):
     """
     Grid for radially symmetric system. This grid consists of two specifiers:
@@ -20,13 +21,17 @@ class RadialGrid(BaseGrid):
     grid_integrator to the actual coordinate.
     """
 
-    def __init__(self, ngrid: int, grid_integrator: str = "chebyshev",
-                 grid_transform: Union[str, BaseGridTransform] = "logm3",
-                 dtype: torch.dtype = torch.float64,
-                 device: torch.device = torch.device('cpu')):
+    def __init__(
+        self,
+        ngrid: int,
+        grid_integrator: str = "chebyshev",
+        grid_transform: Union[str, BaseGridTransform] = "logm3",
+        dtype: torch.dtype = torch.float64,
+        device: torch.device = torch.device("cpu"),
+    ):
         self._dtype = dtype
         self._device = device
-        grid_transform_obj  = get_grid_transform(grid_transform)
+        grid_transform_obj = get_grid_transform(grid_transform)
 
         # get the location and weights of the integration in its original
         # coordinate
@@ -79,6 +84,7 @@ class RadialGrid(BaseGrid):
         else:
             raise KeyError("getparamnames for %s is not set" % methodname)
 
+
 def get_xw_integration(n: int, s0: str) -> Tuple[np.ndarray, np.ndarray]:
     # returns ``n`` points of integration from -1 to 1 and its integration
     # weights
@@ -87,14 +93,15 @@ def get_xw_integration(n: int, s0: str) -> Tuple[np.ndarray, np.ndarray]:
     if s == "chebyshev":
         # generate the x and w from chebyshev polynomial
         # https://doi.org/10.1063/1.475719 eq (9) & (10)
-        np1 = n + 1.
+        np1 = n + 1.0
         icount = np.arange(n, 0, -1)
         ipn1 = icount * np.pi / np1
         sin_ipn1 = np.sin(ipn1)
         sin_ipn1_2 = sin_ipn1 * sin_ipn1
-        xcheb = (np1 - 2 * icount) / np1 + 2 / np.pi * \
-                (1 + 2. / 3 * sin_ipn1 * sin_ipn1) * np.cos(ipn1) * sin_ipn1
-        wcheb = 16. / (3 * np1) * sin_ipn1_2 * sin_ipn1_2
+        xcheb = (np1 - 2 * icount) / np1 + 2 / np.pi * (
+            1 + 2.0 / 3 * sin_ipn1 * sin_ipn1
+        ) * np.cos(ipn1) * sin_ipn1
+        wcheb = 16.0 / (3 * np1) * sin_ipn1_2 * sin_ipn1_2
         return xcheb, wcheb
 
     elif s == "chebyshev2":
@@ -115,9 +122,16 @@ def get_xw_integration(n: int, s0: str) -> Tuple[np.ndarray, np.ndarray]:
         w[0] *= 0.5
         w[-1] *= 0.5
         return x, w
+    elif s == "uniform_positive":
+        x = np.linspace(0, 1, n)
+        w = np.ones(n) * (x[1] - x[0])
+        w[0] *= 0.5
+        w[-1] *= 0.5
+        return x, w
     else:
-        avail = ["chebyshev", "chebyshev2", "uniform"]
+        avail = ["chebyshev", "chebyshev2", "uniform", "uniform_positive"]
         raise RuntimeError("Unknown grid_integrator: %s. Available: %s" % (s0, avail))
+
 
 class SlicedRadialGrid(RadialGrid):
     # Internal class to represent the sliced radial grid
@@ -127,7 +141,9 @@ class SlicedRadialGrid(RadialGrid):
         self.dvolume = obj.dvolume[key]
         self.rgrid = obj.rgrid[key]
 
+
 ### grid transformation ###
+
 
 class BaseGridTransform(object):
     @abstractmethod
@@ -139,6 +155,7 @@ class BaseGridTransform(object):
     def get_drdx(self, x: torch.Tensor) -> torch.Tensor:
         # returns the dr/dx
         pass
+
 
 class DE2Transformation(BaseGridTransform):
     # eq (31) in https://link.springer.com/article/10.1007/s00214-011-0985-x
@@ -161,6 +178,7 @@ class DE2Transformation(BaseGridTransform):
         xnew = 0.5 * (x * (self.xmax - self.xmin) + (self.xmax + self.xmin))
         return r * (self.alpha + torch.exp(-xnew)) * (0.5 * (self.xmax - self.xmin))
 
+
 class LogM3Transformation(BaseGridTransform):
     # eq (12) in https://aip.scitation.org/doi/pdf/10.1063/1.475719
     def __init__(self, ra: float = 1.0, eps: float = 1e-15):
@@ -174,6 +192,7 @@ class LogM3Transformation(BaseGridTransform):
     def get_drdx(self, x: torch.Tensor) -> torch.Tensor:
         return self.ra / self.ln2 / (1 - x + self.eps)
 
+
 class TreutlerM4Transformation(BaseGridTransform):
     # eq (19) in https://doi.org/10.1063/1.469408
     def __init__(self, xi: float = 1.0, alpha: float = 0.6, eps: float = 1e-15):
@@ -184,8 +203,12 @@ class TreutlerM4Transformation(BaseGridTransform):
 
     def x2r(self, x: torch.Tensor) -> torch.Tensor:
         a = 1.0 + self._eps
-        r = self._xi / self._ln2 * (a + x) ** self._alpha * \
-            (self._ln2 - torch.log1p(-x + self._eps))
+        r = (
+            self._xi
+            / self._ln2
+            * (a + x) ** self._alpha
+            * (self._ln2 - torch.log1p(-x + self._eps))
+        )
         return r
 
     def get_drdx(self, x: torch.Tensor) -> torch.Tensor:
@@ -194,6 +217,16 @@ class TreutlerM4Transformation(BaseGridTransform):
         r1 = fac / (1 - x + self._eps)
         r2 = fac * self._alpha / (a + x) * (self._ln2 - torch.log1p(-x + self._eps))
         return r2 + r1
+
+
+class NoGridTransform(BaseGridTransform):
+    # no transformation, x is directly r
+    def x2r(self, x: torch.Tensor) -> torch.Tensor:
+        return x
+
+    def get_drdx(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.ones_like(x)
+
 
 def get_grid_transform(s0: Union[str, BaseGridTransform]) -> BaseGridTransform:
     # return the grid transformation object from the input
@@ -207,5 +240,7 @@ def get_grid_transform(s0: Union[str, BaseGridTransform]) -> BaseGridTransform:
             return DE2Transformation()
         elif s == "treutlerm4":
             return TreutlerM4Transformation()
+        elif s == "none":
+            return NoGridTransform()
         else:
             raise RuntimeError("Unknown grid transformation: %s" % s0)

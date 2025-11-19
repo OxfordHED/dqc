@@ -30,16 +30,18 @@ def friedman_expander(num_nodes, degree):
     assert isinstance(num_nodes, int) and isinstance(degree, int)
     max_val = int(num_nodes * degree / 2)
     permutation = torch.randperm(max_val)
-    starts = torch.arange(0, max_val)
-    ends = permutation[starts].apply_(lambda x: x // (degree / 2))
-    return torch.vstack((starts.apply_(lambda x: x // (degree / 2)), ends)).T
+    starts = torch.arange(0, max_val, dtype=np.int64)
+    ends = permutation[starts].apply_(lambda x: int(x) // int(degree / 2))
+    return torch.vstack((starts.apply_(lambda x: int(x) // int(degree / 2)), ends)).T
 
 
-def ramanujan_expander(expander_construction, num_nodes, degree):
+def ramanujan_expander(expander_construction, num_nodes, degree, num_tries: int = 1):
     expander = expander_construction(num_nodes, degree)
-    # while not validate_expander(expander, degree, num_nodes):
-    #     print("Expander validation failed. Retrying...")
-    #     expander = expander_construction(num_nodes, degree)
+    i = 0
+    while not validate_expander(expander, degree, num_nodes) and i < num_tries:
+        print("Expander validation failed. Retrying...")
+        expander = expander_construction(num_nodes, degree)
+        i += 1
     return expander
 
 
@@ -132,7 +134,7 @@ class BeckeGrid(BaseGrid):
             self._graph = torch.cat(graph_list, dim=0)
             if expander_degree > 0:
                 expander_edges = ramanujan_expander(
-                    friedman_expander, self._rgrid.shape[0], expander_degree
+                    friedman_expander, self._rgrid.shape[0], expander_degree, 0  # Expander verification is too expensive to run for large grids
                 )
                 self._graph = torch.cat((self._graph, expander_edges), dim=0)
         else:
