@@ -31,7 +31,7 @@ __all__ = ["Mol"]
 
 
 class MolEmbedding:
-    def __init__(self, mol: "Mol"):
+    def __init__(self, mol: "Mol", append_raw_coords: bool = False):
         # Todo: How do we get distinction between same atom grid or different atom grid?
         # (without violating permutation invariance)
         try:
@@ -40,14 +40,19 @@ class MolEmbedding:
             mol.setup_grid()
             grid = mol.get_grid()
 
-        radial_dists = [
-            torch.norm(atomg.get_rgrid(), p=2, dim=1) for atomg in grid._atomgrids
-        ]
-        self._radial_dists = torch.cat(radial_dists, dim=0)
-        len_subgrids = torch.tensor([rg.shape[0] for rg in radial_dists])
-        self._atom_zs = torch.repeat_interleave(mol.atomzs, len_subgrids)
-        self._chunk_tracker = 0
-        del grid._atomgrids
+        self._append_coords = append_raw_coords
+
+        if not append_raw_coords:
+            radial_dists = [
+                torch.norm(atomg.get_rgrid(), p=2, dim=1) for atomg in grid._atomgrids
+            ]
+            self._radial_dists = torch.cat(radial_dists, dim=0)
+            len_subgrids = torch.tensor([rg.shape[0] for rg in radial_dists])
+            self._atom_zs = torch.repeat_interleave(mol.atomzs, len_subgrids)
+            self._chunk_tracker = 0
+            del grid._atomgrids
+        else:
+            self._coordinates = grid.get_rgrid()
 
     def apply(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
         if isinstance(densinfo, SpinParam):
@@ -58,6 +63,9 @@ class MolEmbedding:
         else:
             dens = densinfo.value
             zeta = torch.zeros_like(dens)
+
+        if self._append_coords:
+            return torch.cat([torch.stack([dens, zeta], dim=-1), self._coordinates], dim=-1)
 
         return torch.stack([dens, zeta, self._radial_dists, self._atom_zs], dim=-1)
 
@@ -363,9 +371,9 @@ class Mol(BaseSystem):
             )
         return self._grid.graph
 
-    def get_embedding(self) -> MolEmbedding:
+    def get_embedding(self, append_raw_coords: bool = False) -> MolEmbedding:
         if self._embedding is None:
-            self._embedding = MolEmbedding(self)
+            self._embedding = MolEmbedding(self, append_raw_coords=append_raw_coords)
         return self._embedding
 
     def requires_grid(self) -> bool:

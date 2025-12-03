@@ -80,10 +80,11 @@ class _KSEngine(BaseSCFEngine):
         if self.xc is not None or system.requires_grid():
             system.setup_grid()
             kwargs = {}
-            if system._graph is not None:
+            if hasattr(self.xc, "is_graph") and self.xc.is_graph:
                 # Todo: figure out where to transpose
+                is_gino = hasattr(self.xc, "is_gino") and self.xc.is_gino
                 kwargs["graph"] = system.get_graph().T
-                kwargs["embed"] = system.get_embedding()
+                kwargs["embed"] = system.get_embedding(append_raw_coords=is_gino)
             self.hamilton.setup_grid(system.get_grid(), self.xc, **kwargs)
 
         # get the HF engine and build the hamiltonian
