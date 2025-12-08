@@ -355,6 +355,8 @@ class Mol(BaseSystem):
             self._grid.generate_graph(self._graph, **self._graph_kwargs)
         elif isinstance(self._graph, torch.Tensor):
             self._grid._graph = self._graph
+            if isinstance(self._graph_kwargs.get("edge_feats", None), torch.Tensor):
+                self._grid._edge_feats = self._graph_kwargs["edge_feats"]
         logger.log("Constructing the integration grid: done")
 
     def get_grid(self) -> BaseGrid:
