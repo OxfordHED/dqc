@@ -39,7 +39,7 @@ class BaseXC(xt.EditableModule):
     @overload
     def get_vxc(self, densinfo: SpinParam[ValGrad]) -> SpinParam[ValGrad]: ...
 
-    def get_vxc(self, densinfo, embed=None, graph=None):
+    def get_vxc(self, densinfo, embed=None, graph=None, edge_feats=None):
         """
         Returns the ValGrad for the xc potential given the density info
         for unpolarized case.
@@ -57,6 +57,7 @@ class BaseXC(xt.EditableModule):
         if embed is not None or graph is not None:
             kwargs["embed"] = embed
             kwargs["graph"] = graph
+            kwargs["edge_feats"] = edge_feats
 
         # mark the densinfo components as requiring grads
         with self._enable_grad_densinfo(densinfo):
