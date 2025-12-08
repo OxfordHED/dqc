@@ -38,7 +38,7 @@ def friedman_expander(num_nodes, degree):
 def ramanujan_expander(expander_construction, num_nodes, degree, num_tries: int = 1):
     expander = expander_construction(num_nodes, degree)
     i = 0
-    while not validate_expander(expander, degree, num_nodes) and i < num_tries:
+    while i < num_tries and not validate_expander(expander, degree, num_nodes):
         print("Expander validation failed. Retrying...")
         expander = expander_construction(num_nodes, degree)
         i += 1
