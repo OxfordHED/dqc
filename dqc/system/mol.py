@@ -371,6 +371,13 @@ class Mol(BaseSystem):
             )
         return self._grid.graph
 
+    def get_edge_feats(self):
+        if self._grid is None:
+            raise RuntimeError(
+                "Please run mol.setup_grid() first before calling get_edge_feats()"
+            )
+        return self._grid.edge_feats
+
     def get_embedding(self, append_raw_coords: bool = False) -> MolEmbedding:
         if self._embedding is None:
             self._embedding = MolEmbedding(self, append_raw_coords=append_raw_coords)

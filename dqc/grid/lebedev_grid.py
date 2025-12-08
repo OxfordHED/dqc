@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from typing import List, Sequence, Dict
 import torch
@@ -75,6 +77,7 @@ class LebedevGrid(BaseGrid):
         self._prec = prec
         self._nrad = radgrid.get_rgrid().shape[0]
         self._graph = None
+        self._edge_feats = None
 
         assert (prec % 2 == 1) and (3 <= prec <= 131), (
             "Precision must be an odd number between 3 and 131"
@@ -136,12 +139,18 @@ class LebedevGrid(BaseGrid):
             raise Exception("Graph not generated yet")
         return self._graph
 
+
+    @property
+    def edge_feats(self) -> torch.Tensor | None:
+        return self._edge_feats
+
     def generate_graph(
         self,
         graph_method: str = "grid_neighbours",
         sparse: bool = True,
         range_modifier: float = 0.85,
         radial_edges: bool = True,
+        dist_edge_feats: bool = False,
     ) -> torch.Tensor:
         # Todo: decide whether we should include self adjacency
 
@@ -173,6 +182,12 @@ class LebedevGrid(BaseGrid):
                 constituent_graphs.append(radial_edge_proto + i * nangs)
 
         self._graph = torch.cat(constituent_graphs, dim=0)
+        if dist_edge_feats:
+            edge_dists = torch.norm(
+                self._xyz[self._graph[:, 0]] - self._xyz[self._graph[:, 1]], dim=1
+            )
+            self._edge_feats = edge_dists.unsqueeze(-1)
+
         return self._graph
 
 
@@ -192,6 +207,7 @@ class TruncatedLebedevGrid(LebedevGrid):
         self._dtype = grid0.dtype
         self._device = grid0.device
         self._xyz = torch.cat(tuple(grid.get_rgrid() for grid in self.lebedevs), dim=0)
+        self._edge_feats = None
         self._dvolume = torch.cat(
             tuple(grid.get_dvolume() for grid in self.lebedevs), dim=0
         )
@@ -202,6 +218,7 @@ class TruncatedLebedevGrid(LebedevGrid):
         sparse: bool = True,
         range_modifier: float = 0.85,
         radial_edges: bool = True,
+        dist_edge_feats: bool = False,
     ) -> torch.Tensor:
         outer_last = None
         graph_edges = []
@@ -233,4 +250,9 @@ class TruncatedLebedevGrid(LebedevGrid):
             outer_last = grid.get_rgrid()[-points_per_shell:]
             running_counter += grid.get_rgrid().shape[0] - points_per_shell
         self._graph = torch.cat(graph_edges, dim=0)
+        if dist_edge_feats:
+            edge_dists = torch.norm(
+                self._xyz[self._graph[:, 0]] - self._xyz[self._graph[:, 1]], dim=1
+            )
+            self._edge_feats = edge_dists.unsqueeze(-1)
         return self._graph

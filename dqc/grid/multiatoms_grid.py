@@ -68,6 +68,7 @@ class BeckeGrid(BaseGrid):
         self._dtype = atomgrid[0].dtype
         self._device = atomgrid[0].device
         self._graph = None
+        self._edge_feats = None
 
         self._atomgrids = atomgrid
         # construct the grid points positions, weights, and the index of grid corresponding to each atom
@@ -90,6 +91,10 @@ class BeckeGrid(BaseGrid):
     @property
     def graph(self) -> torch.Tensor:
         return self._graph
+
+    @property
+    def edge_feats(self) -> Optional[torch.Tensor]:
+        return self._edge_feats
 
     @property
     def coord_type(self):
@@ -126,6 +131,7 @@ class BeckeGrid(BaseGrid):
             # calculate the grid neighbours
             graph_list = []
             running_counter = 0
+            dist_edge_feats = kwargs.pop("dist_edge_feats", False)
             for grid in self._atomgrids:
                 grid_len = grid.get_rgrid().shape[0]
                 grid.generate_graph(graph_method, **kwargs)
@@ -136,7 +142,16 @@ class BeckeGrid(BaseGrid):
                 expander_edges = ramanujan_expander(
                     friedman_expander, self._rgrid.shape[0], expander_degree, 0  # Expander verification is too expensive to run for large grids
                 )
+                self._edge_feats = torch.cat((torch.zeros(self._graph.shape[0]), torch.ones(expander_edges.shape[0])), dim=0)
                 self._graph = torch.cat((self._graph, expander_edges), dim=0)
+            if dist_edge_feats:
+                edge_dists = torch.norm(
+                    self._rgrid[self._graph[:, 0]] - self._rgrid[self._graph[:, 1]], dim=1
+                )
+                self._edge_feats = edge_dists.unsqueeze(-1) if self._edge_feats is None else torch.cat(
+                    (self._edge_feats, edge_dists.unsqueeze(-1)), dim=-1
+                )
+
         else:
             raise KeyError("Invalid graph_method: %s" % graph_method)
 
