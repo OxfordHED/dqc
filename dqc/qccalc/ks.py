@@ -84,7 +84,7 @@ class _KSEngine(BaseSCFEngine):
                 # Todo: figure out where to transpose
                 is_gino = hasattr(self.xc, "is_gino") and self.xc.is_gino
                 kwargs["graph"] = system.get_graph().T
-                kwargs["edge_feats"] = system.get_edge_feats().T
+                kwargs["edge_feats"] = system.get_edge_feats()
                 kwargs["embed"] = system.get_embedding(append_raw_coords=is_gino)
             self.hamilton.setup_grid(system.get_grid(), self.xc, **kwargs)
 
