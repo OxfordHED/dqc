@@ -30,7 +30,7 @@ def friedman_expander(num_nodes, degree):
     assert isinstance(num_nodes, int) and isinstance(degree, int)
     max_val = int(num_nodes * degree / 2)
     permutation = torch.randperm(max_val)
-    starts = torch.arange(0, max_val, dtype=np.int64)
+    starts = torch.arange(0, max_val, dtype=torch.int64)
     ends = permutation[starts].apply_(lambda x: int(x) // int(degree / 2))
     return torch.vstack((starts.apply_(lambda x: int(x) // int(degree / 2)), ends)).T
 
