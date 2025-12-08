@@ -180,6 +180,7 @@ class HamiltonCGTO(BaseHamilton):
         xc: Optional[BaseXC] = None,
         embed: Optional = None,
         graph: Optional[torch.Tensor] = None,
+        edge_feats: Optional[torch.Tensor] = None,
     ) -> None:
         # save the family and save the xc
         self.xc = xc
@@ -190,6 +191,7 @@ class HamiltonCGTO(BaseHamilton):
 
         self._embed = embed
         self._graph = graph
+        self._edge_feats = edge_feats
 
         # save the grid
         self.grid = grid
@@ -316,6 +318,7 @@ class HamiltonCGTO(BaseHamilton):
         if self._graph is not None or self._embed is not None:
             kwargs["embed"] = self._embed
             kwargs["graph"] = self._graph
+            kwargs["edge_feats"] = self._edge_feats
         potinfo = self.xc.get_vxc(densinfo, **kwargs)  # value: (*BD, nr)
         vxc_linop = SpinParam.apply_fcn(
             lambda potinfo_: self._get_vxc_from_potinfo(potinfo_), potinfo
@@ -392,6 +395,7 @@ class HamiltonCGTO(BaseHamilton):
         if self._graph is not None or self._embed is not None:
             kwargs["embed"] = self._embed
             kwargs["graph"] = self._graph
+            kwargs["edge_feats"] = self._edge_feats
         edens = self.xc.get_edensityxc(densinfo, **kwargs)  # (*BD, nr)
 
         return torch.sum(self.grid.get_dvolume() * edens, dim=-1)
