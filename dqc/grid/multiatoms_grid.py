@@ -142,7 +142,7 @@ class BeckeGrid(BaseGrid):
                 expander_edges = ramanujan_expander(
                     friedman_expander, self._rgrid.shape[0], expander_degree, 0  # Expander verification is too expensive to run for large grids
                 )
-                self._edge_feats = torch.cat((torch.zeros(self._graph.shape[0]), torch.ones(expander_edges.shape[0])), dim=0)
+                self._edge_feats = torch.cat((torch.zeros(self._graph.shape[0]), torch.ones(expander_edges.shape[0])), dim=0).unsqueeze(-1)
                 self._graph = torch.cat((self._graph, expander_edges), dim=0)
             if dist_edge_feats:
                 edge_dists = torch.norm(
