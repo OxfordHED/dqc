@@ -151,8 +151,6 @@ class BeckeGrid(BaseGrid):
                 self._edge_feats = edge_dists.unsqueeze(-1) if self._edge_feats is None else torch.cat(
                     (self._edge_feats, edge_dists.unsqueeze(-1)), dim=-1
                 )
-                print(self._graph.shape, self._edge_feats.shape)
-
         else:
             raise KeyError("Invalid graph_method: %s" % graph_method)
 
