@@ -56,11 +56,11 @@ class MolEmbedding:
 
     def apply(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
         if isinstance(densinfo, SpinParam):
-            rms_u = torch.sqrt(densinfo.u.grad.pow(2).sum(dim=-1))
-            rms_d = torch.sqrt(densinfo.d.grad.pow(2).sum(dim=-1))
+            rms_u = torch.sqrt(densinfo.u.grad.pow(2).sum(dim=0))
+            rms_d = torch.sqrt(densinfo.d.grad.pow(2).sum(dim=0))
             return torch.stack([densinfo.u.value, densinfo.d.value, rms_u, rms_d], dim=-1)
         else:
-            rms_grad = torch.sqrt(densinfo.grad.pow(2).sum(dim=-1))
+            rms_grad = torch.sqrt(densinfo.grad.pow(2).sum(dim=0))
             return torch.stack([
                 densinfo.value,
                 torch.zeros_like(densinfo.value),
