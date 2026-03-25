@@ -60,18 +60,18 @@ class MolEmbedding:
             zeta = (densinfo.u.value - densinfo.d.value) / torch.where(
                 dens > ldexp(1.0, -53), dens, ldexp(1.0, -53)
             )
-            dens_grad = SpinParam.sum(densinfo).grad.pow(2).sum(0).sqrt()
+            # dens_grad = SpinParam.sum(densinfo).grad.pow(2).sum(0).sqrt()
             # Todo: consider this formula carefully
             # zeta_grad = (densinfo.u.grad - densinfo.d.grad).pow(2).sum(0).sqrt() / torch.where(
             #    dens_grad > ldexp(1.0, -53), dens_grad, ldexp(1.0, -53)
             #    )
         else:
             dens = densinfo.value
-            dens_grad = densinfo.grad.pow(2).sum(0).sqrt()
+            # dens_grad = densinfo.grad.pow(2).sum(0).sqrt()
             zeta = torch.zeros_like(dens)
             # zeta_grad = torch.zeros_like(dens_grad)
         
-        return torch.stack((dens, zeta, dens_grad), dim=-1)
+        return torch.stack((dens, zeta), dim=-1)
 
 
 class Mol(BaseSystem):
