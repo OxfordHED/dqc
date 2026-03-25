@@ -60,9 +60,9 @@ class MolEmbedding:
         else:
             return torch.stack([
                 densinfo.value,
-                torch.tensor(0, dtype=densinfo.value.dtype, device=densinfo.value.device),
+                torch.zeros_like(densinfo.value),
                 densinfo.grad,
-                torch.tensor(0, dtype=densinfo.value.dtype, device=densinfo.value.device)
+                torch.zeros_like(densinfo.value)
             ], dim=-1)
 
 class Mol(BaseSystem):
