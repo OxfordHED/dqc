@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any, Tuple, List, Union, overload
+import math
 import torch
 import xitorch as xt
 import xitorch.linalg
@@ -323,6 +324,32 @@ class _HFEngine(BaseSCFEngine):
         if self._smearing <= 0.0:
             return torch.zeros((), dtype=ref.dtype, device=ref.device)
         return self.fock2entropy(self.__dm2fock(dm))
+
+    def get_symmetry_broken_dm0(self, angle: float) -> SpinParam:
+        # Spin-symmetry-broken initial density: mix HOMO and LUMO of the core
+        # orbitals oppositely for the two spins, so alpha localises one way and
+        # beta the other. This seeds UKS at a spin-broken state (the physically
+        # correct dissociation, e.g. H. + .H) instead of the symmetric saddle.
+        assert self._polarized, \
+            "break_symmetry requires an unrestricted (polarized) calculation"
+        ovlp = self._hamilton.get_overlap()
+        nao = self._core1e_linop.shape[-1]
+        eigopts = getattr(self, "eigen_options", {"method": "exacteig"})
+        _, eivecs = xitorch.linalg.lsymeig(
+            A=self._core1e_linop, neig=nao, M=ovlp, **eigopts)  # (..., nao, nao)
+        c, s = math.cos(angle), math.sin(angle)
+
+        def channel_dm(norb, orb_w, sign):
+            orbs = eivecs[..., :norb].clone()
+            if norb < nao:  # rotate HOMO toward LUMO to spin-polarize
+                homo = eivecs[..., norb - 1]
+                lumo = eivecs[..., norb]
+                orbs[..., norb - 1] = c * homo + sign * s * lumo
+            return self._hamilton.ao_orb2dm(orbs, orb_w)
+
+        dm_u = channel_dm(self._norb.u, self._orb_weight.u, +1.0)
+        dm_d = channel_dm(self._norb.d, self._orb_weight.d, -1.0)
+        return SpinParam(u=dm_u, d=dm_d)
 
     @overload
     def diagonalize(self, fock: xt.LinearOperator, norb: int) -> Tuple[torch.Tensor, torch.Tensor]:

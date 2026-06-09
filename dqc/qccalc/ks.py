@@ -222,6 +222,10 @@ class _KSEngine(BaseSCFEngine):
             return torch.zeros((), dtype=ref.dtype, device=ref.device)
         return self.hf_engine.fock2entropy(self.__dm2fock(dm))
 
+    def get_symmetry_broken_dm0(self, angle: float) -> SpinParam:
+        # spin-symmetry-broken initial guess (core-orbital HOMO-LUMO mixing)
+        return self.hf_engine.get_symmetry_broken_dm0(angle)
+
     @overload
     def __dm2fock(self, dm: torch.Tensor) -> xt.LinearOperator: ...
 

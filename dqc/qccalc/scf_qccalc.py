@@ -51,14 +51,16 @@ class SCF_QCCalc(BaseQCCalc):
             return_history: bool = False,
             diagnose: bool = False,
             conv_tol: float = 1e-6,
-            strict: bool = False) -> BaseQCCalc:
+            strict: bool = False,
+            break_symmetry: float = 0.0) -> BaseQCCalc:
         """Run the self-consistent field iteration and return the converged calculation.
 
         Arguments
         ---------
         dm0: str or torch.Tensor or SpinParam of torch.Tensor
             Initial density-matrix guess. ``"1e"`` (default) builds it from the
-            one-electron Hamiltonian.
+            one-electron Hamiltonian. An explicit tensor is used as given
+            (detached) and takes precedence over ``break_symmetry``.
         eigen_options: dict or None
             Options forwarded to the orbital diagonalization (default
             ``{"method": "exacteig"}``).
@@ -82,6 +84,13 @@ class SCF_QCCalc(BaseQCCalc):
             gradient-sensitive work; loosen to silence marginal cases.
         strict: bool
             If True, raise RuntimeError when the SCF did not converge (else warn).
+        break_symmetry: float
+            If > 0 (and the calculation is unrestricted), start from a
+            spin-symmetry-broken guess obtained by HOMO-LUMO mixing of the core
+            orbitals with this mixing angle (radians; ~pi/4 is maximal). Lets UKS
+            reach spin-broken solutions (e.g. H. + .H at dissociation) that it
+            cannot find from the default spin-symmetric guess. Ignored if ``dm0``
+            is given explicitly or the calculation is restricted.
         """
         self._solve_warnings = []
         # get default options
@@ -123,7 +132,11 @@ class SCF_QCCalc(BaseQCCalc):
         self._engine.set_eigen_options(eigen_options)
 
         # set up the initial self-consistent param guess
-        if dm0 is None:
+        if break_symmetry > 0.0 and self._polarized:
+            dm = SpinParam.apply_fcn(
+                lambda x: x.detach(),
+                self._engine.get_symmetry_broken_dm0(float(break_symmetry)))
+        elif dm0 is None:
             dm = self._get_zero_dm()
         elif isinstance(dm0, str):
             if dm0 == "1e":  # initial density based on 1-electron Hamiltonian
