@@ -81,6 +81,7 @@ class HamiltonCGTO(BaseHamilton):
         self.xc: Optional[BaseXC] = None
         self.xcfamily = 1
         self.is_built = False
+        self._setup_family = 0     # highest xc family the grid AOs are set up for
 
         # initialize cache
         self._cache = cache if cache is not None else Cache.get_dummy()
@@ -105,6 +106,11 @@ class HamiltonCGTO(BaseHamilton):
 
     ############# setups #############
     def build(self) -> BaseHamilton:
+        # idempotent: the integral matrices are deterministic functions of the fixed
+        # basis/options, so a re-constructed KS on the same persistent system reuses
+        # them (training loops build a KS per evaluation; elrep alone is O(nao^4)).
+        if self.is_built:
+            return self
         # get the matrices (all (nao, nao), except el_mat)
         # these matrices have already been normalized
         with self._cache.open():
@@ -182,6 +188,22 @@ class HamiltonCGTO(BaseHamilton):
         graph: Optional[torch.Tensor] = None,
         edge_feats: Optional[torch.Tensor] = None,
     ) -> None:
+        # idempotent fast path: the AO values on the grid depend only on (grid, basis)
+        # and the highest derivative level required by the xc family -- if this grid
+        # is already set up to a sufficient level (and no embedding inputs are in
+        # play), only the xc bookkeeping needs updating. Training loops construct a
+        # KS per evaluation on a persistent system; re-running eval_gto/eval_gradgto
+        # there is pure churn (tens of MB and ~1-3% wall per evaluation).
+        needed_family = 1 if xc is None else xc.family
+        if (self.is_ao_set and self.grid is grid
+                and embed is None and self._embed is None
+                and graph is None and self._graph is None
+                and edge_feats is None and getattr(self, "_edge_feats", None) is None
+                and needed_family <= self._setup_family):
+            self.xc = xc
+            self.xcfamily = needed_family
+            return
+
         # save the family and save the xc
         self.xc = xc
         if xc is None:
@@ -208,6 +230,7 @@ class HamiltonCGTO(BaseHamilton):
         self.basis_dvolume = self.basis * self.dvolume.unsqueeze(-1)  # (ngrid, nao)
 
         if self.xcfamily == 1:  # LDA
+            self._setup_family = 1
             return
 
         # setup the gradient of the basis
@@ -218,6 +241,7 @@ class HamiltonCGTO(BaseHamilton):
             self.libcint_wrapper, self.rgrid, to_transpose=True
         )
         if self.xcfamily == 2:  # GGA
+            self._setup_family = 2
             return
 
         # setup the laplacian of the basis
@@ -226,6 +250,7 @@ class HamiltonCGTO(BaseHamilton):
         self.lapl_basis = intor.eval_laplgto(
             self.libcint_wrapper, self.rgrid, to_transpose=True
         )  # (nao, ngrid)
+        self._setup_family = 4
 
     ############ fock matrix components ############
     def get_nuclattr(self) -> xt.LinearOperator:
