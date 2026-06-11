@@ -131,7 +131,6 @@ class IdentityOrbConverter(BaseOrbConverter):
         ovlp_eival, ovlp_eivec = xt.linalg.symeig(xt.LinearOperator.m(ovlp, is_hermitian=True))
         self._inv_sqrt_ovlp = (ovlp_eivec * ovlp_eival ** (-0.5)) @ ovlp_eivec.transpose(-2, -1).conj()
         self._sqrt_ovlp = (ovlp_eivec * ovlp_eival ** (0.5)) @ ovlp_eivec.transpose(-2, -1).conj()
-        ovlp2 = (ovlp_eivec * ovlp_eival) @ ovlp_eivec.transpose(-2, -1).conj()
         self._nao = ovlp.shape[-1]
 
     def nao(self) -> int:

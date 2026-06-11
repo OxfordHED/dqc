@@ -261,7 +261,6 @@ def lowest_eival_orb_hessian(qc: BaseQCCalc) -> torch.Tensor:
     # (nao, norb)
     orb_weights = system.get_orbweight(polarized=polarized)
     norb = SpinParam.apply_fcn(lambda orb_weights: len(orb_weights), orb_weights)
-    norb_max = SpinParam.reduce(norb, max)
     orb_pc = SpinParam.apply_fcn(
         lambda dm, norb: h.dm2ao_orb_params(dm, norb=norb), dm, norb)  # (*, nao, norb1), (*, nao, norb2)
     orb_p = SpinParam.apply_fcn(lambda orb_pc: orb_pc[0], orb_pc)

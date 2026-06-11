@@ -169,9 +169,6 @@ class IntorNameManager(object):
 
     def get_comp_permute_path(self, transpose_path: List[Tuple[int, int]]) -> List[int]:
         # get the component permute path given the basis transpose path
-        flat_ops: List[str] = sum(self._ops, [])
-        n_ip = flat_ops.count("ip")
-
         # get the positions of the axes
         dim_pos = []
         ioffset = 0

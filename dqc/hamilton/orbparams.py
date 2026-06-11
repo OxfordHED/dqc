@@ -94,7 +94,6 @@ class MatExpOrbParams(BaseOrbParams):
         # params: (*, nparams)
         # coeffs: (*, nao, norb)
         nao = coeffs.shape[-2]
-        norb = coeffs.shape[-1]
         nparams = params.shape[-1]
         bshape = params.shape[:-1]
 

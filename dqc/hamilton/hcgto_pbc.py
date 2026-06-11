@@ -398,7 +398,6 @@ class HamiltonCGTO_PBC(HamiltonCGTO):
     def _get_vxc_from_potinfo(self, potinfo: ValGrad) -> xt.LinearOperator:
         # overloading from hcgto
 
-        vext = potinfo.value
         vb = potinfo.value * self.basis
 
         if self.xcfamily in [2, 4]:  # GGA or MGGA

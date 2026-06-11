@@ -5,7 +5,7 @@ import numpy as np
 import warnings
 try:
     import pylibxc
-except (ImportError, ModuleNotFoundError) as e:
+except (ImportError, ModuleNotFoundError):
     warnings.warn("Failed to import pylibxc. Might not be able to use xc.")
 
 ############################ libxc with derivative ############################
@@ -29,14 +29,14 @@ class CalcLDALibXCUnpol(torch.autograd.Function):
         }
         res = _get_libxc_res(inp, deriv, libxcfcn, family=1, polarized=False)[0]
 
-        ctx.save_for_backward(rho, res)
+        ctx.save_for_backward(rho)
         ctx.deriv = deriv
         ctx.libxcfcn = libxcfcn
         return (res,)
 
     @staticmethod
     def backward(ctx, *grad_res: torch.Tensor) -> Tuple[Optional[torch.Tensor], ...]:  # type: ignore
-        rho, res = ctx.saved_tensors
+        rho, = ctx.saved_tensors
 
         dres_drho = CalcLDALibXCUnpol.apply(rho, ctx.deriv + 1, ctx.libxcfcn)[0]
         grad_rho = dres_drho * grad_res[0]
@@ -57,7 +57,7 @@ class CalcLDALibXCPol(torch.autograd.Function):
         }
         res = _get_libxc_res(inp, deriv, libxcfcn, family=1, polarized=True)[0]
 
-        ctx.save_for_backward(rho_u, rho_d, res)
+        ctx.save_for_backward(rho_u, rho_d)
         ctx.deriv = deriv
         ctx.libxcfcn = libxcfcn
         return (res,)
@@ -67,7 +67,6 @@ class CalcLDALibXCPol(torch.autograd.Function):
                  *grad_res: torch.Tensor) -> \
             Tuple[Optional[torch.Tensor], ...]:  # type: ignore
         inps = ctx.saved_tensors[:2]
-        res = ctx.saved_tensors[2:]
         deriv = ctx.deriv
         libxcfcn = ctx.libxcfcn
 
@@ -109,7 +108,7 @@ class CalcGGALibXCUnpol(torch.autograd.Function):
         # for gga, res is a tuple
         res = _get_libxc_res(inp, deriv, libxcfcn, family=2, polarized=False)
 
-        ctx.save_for_backward(rho, sigma, *res)
+        ctx.save_for_backward(rho, sigma)
         ctx.deriv = deriv
         ctx.libxcfcn = libxcfcn
         return (*res,)
@@ -118,7 +117,6 @@ class CalcGGALibXCUnpol(torch.autograd.Function):
     def backward(ctx, *grad_res: torch.Tensor) -> \
             Tuple[Optional[torch.Tensor], ...]:  # type: ignore
         inps = ctx.saved_tensors[:2]
-        res = ctx.saved_tensors[2:]
         deriv = ctx.deriv
         libxcfcn = ctx.libxcfcn
 
@@ -158,7 +156,7 @@ class CalcGGALibXCPol(torch.autograd.Function):
         }
         res = _get_libxc_res(inp, deriv, libxcfcn, family=2, polarized=True)
 
-        ctx.save_for_backward(rho_u, rho_d, sigma_uu, sigma_ud, sigma_dd, *res)
+        ctx.save_for_backward(rho_u, rho_d, sigma_uu, sigma_ud, sigma_dd)
         ctx.deriv = deriv
         ctx.libxcfcn = libxcfcn
         return (*res,)
@@ -167,7 +165,6 @@ class CalcGGALibXCPol(torch.autograd.Function):
     def backward(ctx, *grad_res: torch.Tensor) -> \
             Tuple[Optional[torch.Tensor], ...]:  # type: ignore
         inps = ctx.saved_tensors[:5]
-        res = ctx.saved_tensors[5:]
         deriv = ctx.deriv
         libxcfcn = ctx.libxcfcn
 
@@ -237,7 +234,7 @@ class CalcMGGALibXCUnpol(torch.autograd.Function):
         # res is a tuple
         res = _get_libxc_res(inp, deriv, libxcfcn, family=4, polarized=False)
 
-        ctx.save_for_backward(rho, sigma, lapl, kin, *res)
+        ctx.save_for_backward(rho, sigma, lapl, kin)
         ctx.deriv = deriv
         ctx.libxcfcn = libxcfcn
         return (*res,)
@@ -246,7 +243,6 @@ class CalcMGGALibXCUnpol(torch.autograd.Function):
     def backward(ctx, *grad_res: torch.Tensor) -> \
             Tuple[Optional[torch.Tensor], ...]:  # type: ignore
         inps = ctx.saved_tensors[:4]
-        res = ctx.saved_tensors[4:]
         deriv = ctx.deriv
         libxcfcn = ctx.libxcfcn
 
@@ -299,7 +295,7 @@ class CalcMGGALibXCPol(torch.autograd.Function):
         res = _get_libxc_res(inp, deriv, libxcfcn, family=4, polarized=True)
 
         ctx.save_for_backward(rho_u, rho_d, sigma_uu, sigma_ud, sigma_dd,
-                              lapl_u, lapl_d, kin_u, kin_d, *res)
+                              lapl_u, lapl_d, kin_u, kin_d)
         ctx.deriv = deriv
         ctx.libxcfcn = libxcfcn
         return (*res,)
@@ -308,7 +304,6 @@ class CalcMGGALibXCPol(torch.autograd.Function):
     def backward(ctx, *grad_res: torch.Tensor) -> \
             Tuple[Optional[torch.Tensor], ...]:  # type: ignore
         inps = ctx.saved_tensors[:9]
-        res = ctx.saved_tensors[9:]
         deriv = ctx.deriv
         libxcfcn = ctx.libxcfcn
 

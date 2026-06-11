@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-import re
-import warnings
 from typing import List
-try:
-    import pylibxc
-except (ImportError, ModuleNotFoundError) as e:
-    warnings.warn("Failed to import pylibxc. Might not be able to use xc.")
 from dqc.xc.base_xc import BaseXC, ZeroXC
 from dqc.xc.libxc import get_libxc
 from dqc.xc import function_xc

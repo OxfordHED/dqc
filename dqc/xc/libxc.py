@@ -2,7 +2,7 @@ import warnings
 import torch
 try:
     import pylibxc
-except (ImportError, ModuleNotFoundError) as e:
+except (ImportError, ModuleNotFoundError):
     warnings.warn("Failed to import pylibxc. Might not be able to use xc.")
 from typing import List, Tuple, Union, overload, Optional
 from dqc.xc.base_xc import BaseXC

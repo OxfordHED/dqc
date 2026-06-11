@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod, abstractproperty
-from typing import List, Callable
+from typing import List
 import torch
 from dqc.xc.base_xc import BaseXC
 from dqc.utils.datastruct import ValGrad, SpinParam

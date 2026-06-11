@@ -165,7 +165,6 @@ class _EvalGTO(torch.autograd.Function):
                 dout_dalpha = _EvalGTO.apply(*u_wrapper.params, rgrid,
                                              ao_to_atom, u_wrapper, new_sname, False)
 
-                alphas_ao = torch.gather(alphas, dim=-1, index=ao2shl)  # (nu_ao)
                 grad_dalpha = -torch.einsum("...ur,...ur->u", u_grad_res, dout_dalpha)
 
                 grad_alphas.scatter_add_(dim=-1, index=ao2shl, src=grad_dalpha)
