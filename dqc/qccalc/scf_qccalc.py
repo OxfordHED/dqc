@@ -167,13 +167,16 @@ class SCF_QCCalc(BaseQCCalc):
             # with autograd, unlike passing it into the grad-carrying solve.
             if return_history:
                 with torch.no_grad():
-                    _, scp_history = xitorch.optimize.equilibrium(
+                    sc_hist_result = xitorch.optimize.equilibrium(
                         fcn=self._engine.scp2scp,
                         y0=scp0.detach(),
                         bck_options={**bck_options},
                         return_history=True,
                         **fwd_options)
-                self.density_hist = [self._engine.scp2dm(x) for x in scp_history]
+                if isinstance(sc_hist_result, tuple):
+                    _, scp_history = sc_hist_result
+                    self.density_hist = [self._engine.scp2dm(x) for x in scp_history]
+                # else: xitorch 0.5.x ignores return_history; density_hist stays None
 
             # post-process parameters
             self._dm = self._engine.scp2dm(scp)
