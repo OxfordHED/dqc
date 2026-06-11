@@ -310,9 +310,32 @@ class SCF_QCCalc(BaseQCCalc):
         return self._scf_diag
 
     def energy(self) -> torch.Tensor:
-        """Total electronic energy E."""
+        """Total electronic energy E.
+
+        With Fermi smearing on, this is the band energy at the smeared density;
+        use free_energy() or energy0() for entropy-corrected quantities.
+        """
         assert self._has_run
         return self._engine.dm2energy(self._dm)
+
+    def entropy(self) -> torch.Tensor:
+        # electronic (Fermi-smearing) entropy S; zero without smearing
+        assert self._has_run
+        return self._engine.dm2entropy(self._dm)
+
+    def free_energy(self) -> torch.Tensor:
+        # Mermin free energy A = E - kT*S, variational at the finite smearing
+        # temperature (equals energy() when smearing is off)
+        assert self._has_run
+        kT = getattr(self._engine, "smearing", 0.0)
+        return self.energy() - kT * self.entropy()
+
+    def energy0(self) -> torch.Tensor:
+        # energy extrapolated to kT -> 0:  E0 = E - 0.5*kT*S = (E + A)/2
+        # (the leading-order-correct estimate of the zero-temperature energy)
+        assert self._has_run
+        kT = getattr(self._engine, "smearing", 0.0)
+        return self.energy() - 0.5 * kT * self.entropy()
 
     def aodm(self) -> Union[torch.Tensor, SpinParam[torch.Tensor]]:
         # returns the density matrix in the atomic-orbital basis

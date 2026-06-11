@@ -9,6 +9,55 @@ from dqc.utils.datastruct import SpinParam
 
 __all__ = ["HF"]
 
+
+def _fermi_occupations(eigvals: torch.Tensor, n_elec: torch.Tensor,
+                       kT: float, max_occ: float) -> torch.Tensor:
+    """Fractional orbital occupations from Fermi-Dirac (finite-T) smearing.
+
+    Returns ``occ`` (same shape as ``eigvals``) with ``sum(occ) == n_elec``,
+    where ``occ_i = max_occ / (1 + exp((eigvals_i - mu)/kT))`` and the chemical
+    potential ``mu`` is found by root-finding so the electron count is conserved.
+    Differentiable in ``eigvals``: ``mu`` is located by a detached bisection,
+    then a few Newton steps at the converged root attach its implicit gradient
+    (d mu / d eigvals), which is what makes the occupations conserve N to first
+    order under perturbation.
+    """
+    def occ_at(mu):
+        return max_occ * torch.sigmoid((mu - eigvals) / kT)
+
+    ne = float(n_elec)
+    with torch.no_grad():
+        lo = (eigvals.min() - 10.0 * kT - 1.0).clone()
+        hi = (eigvals.max() + 10.0 * kT + 1.0).clone()
+        for _ in range(64):
+            mid = 0.5 * (lo + hi)
+            if float(occ_at(mid).sum()) < ne:
+                lo = mid
+            else:
+                hi = mid
+        mu = 0.5 * (lo + hi)
+    # re-attach gradient via Newton at the (already converged) root
+    for _ in range(6):
+        occ = occ_at(mu)
+        dn_dmu = (occ * (1.0 - occ / max_occ)).sum() / kT
+        mu = mu - (occ.sum() - n_elec) / (dn_dmu + 1e-30)
+    return occ_at(mu)
+
+
+def _smearing_entropy(occ: torch.Tensor, max_occ: float) -> torch.Tensor:
+    """Electronic (Fermi-Dirac) entropy of fractional occupations.
+
+        S = -sum_i g_i [ f_i ln f_i + (1 - f_i) ln(1 - f_i) ]
+
+    where f_i = occ_i / max_occ is the per-spin-orbital occupancy in [0, 1] and
+    g_i = max_occ is the spin degeneracy. The Mermin free energy is E - kT*S and
+    the kT->0 energy extrapolation is E - 0.5*kT*S.
+    """
+    f = (occ / max_occ).clamp(min=1e-12, max=1.0 - 1e-12)
+    s = -(f * torch.log(f) + (1.0 - f) * torch.log1p(-f))
+    return (max_occ * s).sum()
+
+
 class HF(SCF_QCCalc):
     """
     Performing Restricted or Unrestricted Kohn-Sham DFT calculation.
@@ -26,13 +75,19 @@ class HF(SCF_QCCalc):
         If True, then use optimization of the free orbital parameters to find
         the minimum energy.
         Otherwise, use self-consistent iterations.
+    smearing: float
+        Fermi (finite-temperature) smearing kT in Hartree. 0 (default) uses rigid
+        integer aufbau occupation; a positive value gives differentiable
+        fractional occupations that stabilise the SCF for near-degenerate
+        systems (see KS for details).
     """
 
     def __init__(self, system: BaseSystem,
                  restricted: Optional[bool] = None,
-                 variational: bool = False):
+                 variational: bool = False,
+                 smearing: float = 0.0):
 
-        engine = _HFEngine(system, restricted)
+        engine = _HFEngine(system, restricted, smearing=smearing)
         super().__init__(engine, variational)
 
 class _HFEngine(BaseSCFEngine):
@@ -43,7 +98,14 @@ class _HFEngine(BaseSCFEngine):
     """
     def __init__(self, system: BaseSystem,
                  restricted: Optional[bool] = None,
-                 build_grid_if_necessary: bool = False):
+                 build_grid_if_necessary: bool = False,
+                 smearing: float = 0.0):
+
+        # Fermi-smearing temperature kT (Hartree). 0 = integer aufbau occupation;
+        # > 0 = fractional occupations, which stabilise the SCF for near-
+        # degenerate / dissociating systems where integer occupation has no
+        # stable fixed point.
+        self._smearing = float(smearing)
 
         # decide if this is restricted or not
         if restricted is None:
@@ -210,10 +272,57 @@ class _HFEngine(BaseSCFEngine):
 
     def __fock2dm(self, fock):
         # diagonalize the fock matrix and obtain the density matrix
+        if self._smearing > 0.0:
+            return self.__fock2dm_smeared(fock)
         eigvals, eigvecs = self.diagonalize(fock, self._norb)
         dm = SpinParam.apply_fcn(lambda eivecs, orb_weights: self._hamilton.ao_orb2dm(eivecs, orb_weights),
                                  eigvecs, self._orb_weight)
         return dm
+
+    def __fock2dm_smeared(self, fock):
+        # density matrix with Fermi-smeared fractional occupations: diagonalize
+        # for the FULL spectrum (occupied + virtual) so the smearing can spread
+        # weight across near-degenerate frontier orbitals, then occupy by
+        # Fermi-Dirac with mu chosen to conserve the electron count per channel.
+        ovlp = self._hamilton.get_overlap()
+        nao = self._core1e_linop.shape[-1]
+        max_occ = 1.0 if self._polarized else 2.0
+
+        def occupy(fock_one, orb_w):
+            eivals, eivecs = xitorch.linalg.lsymeig(
+                A=fock_one, neig=nao, M=ovlp, **self.eigen_options)
+            occ = _fermi_occupations(eivals, orb_w.sum(), self._smearing, max_occ)
+            return self._hamilton.ao_orb2dm(eivecs, occ)
+
+        return SpinParam.apply_fcn(occupy, fock, self._orb_weight)
+
+    @property
+    def smearing(self) -> float:
+        return self._smearing
+
+    def fock2entropy(self, fock) -> torch.Tensor:
+        # electronic entropy of the Fermi-smeared occupations for a given Fock
+        # (LinearOperator or SpinParam). Shared by HF and KS; each builds its own
+        # Fock so KS uses its vxc-containing eigenvalues.
+        ovlp = self._hamilton.get_overlap()
+        nao = self._core1e_linop.shape[-1]
+        max_occ = 1.0 if self._polarized else 2.0
+
+        def chan_entropy(fock_one, orb_w):
+            eivals, _ = xitorch.linalg.lsymeig(
+                A=fock_one, neig=nao, M=ovlp, **self.eigen_options)
+            occ = _fermi_occupations(eivals, orb_w.sum(), self._smearing, max_occ)
+            return _smearing_entropy(occ, max_occ)
+
+        s = SpinParam.apply_fcn(chan_entropy, fock, self._orb_weight)
+        return SpinParam.sum(s) if isinstance(s, SpinParam) else s
+
+    def dm2entropy(self, dm) -> torch.Tensor:
+        # electronic entropy S (0 if no smearing). Free energy = E - kT*S.
+        ref = SpinParam.sum(dm) if isinstance(dm, SpinParam) else dm
+        if self._smearing <= 0.0:
+            return torch.zeros((), dtype=ref.dtype, device=ref.device)
+        return self.fock2entropy(self.__dm2fock(dm))
 
     @overload
     def diagonalize(self, fock: xt.LinearOperator, norb: int) -> Tuple[torch.Tensor, torch.Tensor]:

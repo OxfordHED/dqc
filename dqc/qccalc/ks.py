@@ -33,6 +33,14 @@ class KS(SCF_QCCalc):
         If True, then solve the Kohn-Sham equation variationally (i.e. using
         optimization) instead of using self-consistent iteration.
         Otherwise, solve it using self-consistent iteration.
+    smearing: float
+        Fermi (finite-temperature) smearing kT in Hartree. 0 (default) uses rigid
+        integer aufbau occupation. A positive value gives fractional occupations
+        (occ_i = max_occ / (1 + exp((eps_i - mu)/kT))), which stabilises the SCF
+        for near-degenerate / dissociating systems that otherwise have no stable
+        fixed point. Differentiable, so gradients still flow for functional/basis
+        learning. The reported energy is the finite-T smeared total energy (no
+        entropy term); use a small kT for large-gap systems.
     """
 
     def __init__(
@@ -41,8 +49,9 @@ class KS(SCF_QCCalc):
         xc: Union[str, BaseXC, None],
         restricted: Optional[bool] = None,
         variational: bool = False,
+        smearing: float = 0.0,
     ):
-        engine = _KSEngine(system, xc, restricted)
+        engine = _KSEngine(system, xc, restricted, smearing=smearing)
         super().__init__(engine, variational)
 
 
@@ -63,6 +72,7 @@ class _KSEngine(BaseSCFEngine):
         system: BaseSystem,
         xc: Union[str, BaseXC, None],
         restricted: Optional[bool] = None,
+        smearing: float = 0.0,
     ):
         # get the xc object
         if isinstance(xc, str):
@@ -91,7 +101,8 @@ class _KSEngine(BaseSCFEngine):
         # get the HF engine and build the hamiltonian
         # no need to rebuild the grid because it has been constructed
         self.hf_engine = _HFEngine(
-            system, restricted=restricted, build_grid_if_necessary=False
+            system, restricted=restricted, build_grid_if_necessary=False,
+            smearing=smearing,
         )
         self._polarized = self.hf_engine.polarized
 
@@ -198,6 +209,18 @@ class _KSEngine(BaseSCFEngine):
         else:
             e_xc = 0.0
         return e_core + e_elrep + e_xc + self._system.get_nuclei_energy()
+
+    @property
+    def smearing(self) -> float:
+        return self.hf_engine.smearing
+
+    def dm2entropy(self, dm) -> torch.Tensor:
+        # electronic entropy of the Fermi-smeared occupations, using the KS
+        # Fock (with vxc) eigenvalues. 0 if no smearing.
+        ref = SpinParam.sum(dm) if isinstance(dm, SpinParam) else dm
+        if self.smearing <= 0.0:
+            return torch.zeros((), dtype=ref.dtype, device=ref.device)
+        return self.hf_engine.fock2entropy(self.__dm2fock(dm))
 
     @overload
     def __dm2fock(self, dm: torch.Tensor) -> xt.LinearOperator: ...
