@@ -262,7 +262,6 @@ class DFPBC(BaseDF):
 
         # retrieve the parameters needed from the wrapper
         ao_to_shell = torch.as_tensor(fuse_wrapper.full_ao_to_shell)  # (nao_tot,)
-        shell_to_ao = torch.as_tensor(fuse_wrapper.full_shell_to_aoloc)  # (nshells_tot,)
         ao_idx0, ao_idx1 = fuse_wrapper.ao_idxs()
         coeffs, alphas, _ = fuse_wrapper.params  # coeffs, alphas: (ngauss_tot,)
         angmoms = torch.as_tensor(fuse_wrapper.full_angmoms)  # (ngauss_tot,)

@@ -324,7 +324,6 @@ def _get_atom_weights(
                 % ratom_adjust
             )
             raise ValueError(msg)
-        chiij = rad / rad.unsqueeze(1)  # (natoms, natoms)
         uij = (rad - rad.unsqueeze(1)) / (rad + rad.unsqueeze(1))
         aij = torch.clamp(
             uij / (uij * uij - 1), min=-0.45, max=0.45
