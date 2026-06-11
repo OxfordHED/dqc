@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import abstractmethod, abstractproperty
 from typing import Optional, Dict, Any, List, Union, Tuple
+import re
 import warnings
 import torch
 import xitorch as xt
@@ -36,6 +37,8 @@ class SCF_QCCalc(BaseQCCalc):
         self.device = self._engine.device
         self._has_run = False
         self._variational = variational
+        # SCF convergence diagnostics, populated by run() (None until then)
+        self._scf_diag: Optional[Dict[str, Any]] = None
         self._solve_warnings: List[str] = []
 
     def get_system(self) -> BaseSystem:
@@ -45,7 +48,10 @@ class SCF_QCCalc(BaseQCCalc):
             eigen_options: Optional[Dict[str, Any]] = None,
             fwd_options: Optional[Dict[str, Any]] = None,
             bck_options: Optional[Dict[str, Any]] = None,
-            return_history: bool = False) -> BaseQCCalc:
+            return_history: bool = False,
+            diagnose: bool = False,
+            conv_tol: float = 1e-6,
+            strict: bool = False) -> BaseQCCalc:
         """Run the self-consistent field iteration and return the converged calculation.
 
         Arguments
@@ -64,6 +70,18 @@ class SCF_QCCalc(BaseQCCalc):
             If True, keep the density-matrix history on ``self.density_hist``.
             This is for diagnostics only -- it breaks ``backward()`` through the
             solve, so do not combine it with gradient-carrying runs.
+        diagnose: bool
+            If True, after the solve recompute the relative SCF fixed-point
+            residual ||scp2scp(scp) - scp|| / ||scp|| and store a convergence
+            diagnostic (see ``get_scf_diagnostics``). Costs ~1 extra SCF step.
+        conv_tol: float
+            Relative residual below which the SCF is deemed converged. Default
+            1e-6: the energy error scales as residual^2, so 1e-6 is
+            energy-converged while still flagging genuine non-convergence
+            (stalls/divergence give residuals of 1e-3..1e0). Tighten for
+            gradient-sensitive work; loosen to silence marginal cases.
+        strict: bool
+            If True, raise RuntimeError when the SCF did not converge (else warn).
         """
         self._solve_warnings = []
         # get default options
@@ -220,10 +238,76 @@ class SCF_QCCalc(BaseQCCalc):
             self._dm = params2dm(min_params0, coeffs0)
 
         self._has_run = True
+
+        # SCF convergence diagnostics (the signal DQC previously discarded).
+        # Guarded so a diagnostic failure can never break an otherwise-good run.
+        if diagnose:
+            try:
+                self._scf_diag = self._compute_scf_diag(conv_tol)
+            except Exception as exc:  # pragma: no cover - defensive
+                self._scf_diag = {"converged": None, "residual": float("nan"),
+                                  "niter": None, "conv_tol": conv_tol,
+                                  "warnings": [f"scf diagnostic failed: {exc}"]}
+            if self._scf_diag["converged"] is False:
+                niter = self._scf_diag["niter"]
+                msg = ("SCF did not converge: relative fixed-point residual "
+                       f"{self._scf_diag['residual']:.3e} > conv_tol {conv_tol:.1e}"
+                       + (f" ({niter} iterations)" if niter is not None else ""))
+                if strict:
+                    raise RuntimeError(msg)
+                warnings.warn(msg, RuntimeWarning, stacklevel=2)
+
         return self
 
+    def _compute_scf_diag(self, conv_tol: float) -> Dict[str, Any]:
+        """Recompute the relative SCF fixed-point residual at the final density
+        and assemble a convergence diagnostic. Detached: no autograd cost."""
+        dm = self._dm
+        if isinstance(dm, SpinParam):
+            dm_d: Union[torch.Tensor, SpinParam] = SpinParam(u=dm.u.detach(), d=dm.d.detach())
+        else:
+            dm_d = dm.detach()
+        with torch.no_grad():
+            scp = self._engine.dm2scp(dm_d)
+            scp_next = self._engine.scp2scp(scp)
+            residual = float((scp_next - scp).norm() / (scp.norm() + 1e-30))
+
+        conv_warn = [w for w in self._solve_warnings if "converg" in w.lower()]
+        niter: Optional[int] = None
+        if self.density_hist is not None:
+            niter = len(self.density_hist)
+        elif conv_warn:
+            m = re.search(r"after (\d+) iterations", conv_warn[0])
+            if m:
+                niter = int(m.group(1))
+        return {
+            "converged": residual < conv_tol,
+            "residual": residual,
+            "niter": niter,
+            "conv_tol": conv_tol,
+            "warnings": conv_warn,
+        }
+
+    def is_converged(self) -> bool:
+        """Whether the SCF reached the requested fixed-point tolerance.
+
+        Only meaningful if run(diagnose=True). Returns False if diagnostics
+        were disabled.
+        """
+        assert self._has_run, "run() must be called first"
+        return bool(self._scf_diag is not None and self._scf_diag["converged"] is True)
+
+    def get_scf_diagnostics(self) -> Optional[Dict[str, Any]]:
+        """Return the SCF convergence diagnostic dict (or None if diagnose=False):
+
+            {converged: bool, residual: float (relative fixed-point residual),
+             niter: int|None, conv_tol: float, warnings: list[str]}
+        """
+        assert self._has_run, "run() must be called first"
+        return self._scf_diag
+
     def energy(self) -> torch.Tensor:
-        # returns the total energy of the system
+        """Total electronic energy E."""
         assert self._has_run
         return self._engine.dm2energy(self._dm)
 
