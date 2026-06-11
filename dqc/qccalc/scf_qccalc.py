@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import abstractmethod, abstractproperty
 from typing import Optional, Dict, Any, List, Union, Tuple
+import warnings
 import torch
 import xitorch as xt
 import xitorch.linalg
@@ -35,6 +36,7 @@ class SCF_QCCalc(BaseQCCalc):
         self.device = self._engine.device
         self._has_run = False
         self._variational = variational
+        self._solve_warnings: List[str] = []
 
     def get_system(self) -> BaseSystem:
         return self._engine.get_system()
@@ -44,7 +46,26 @@ class SCF_QCCalc(BaseQCCalc):
             fwd_options: Optional[Dict[str, Any]] = None,
             bck_options: Optional[Dict[str, Any]] = None,
             return_history: bool = False) -> BaseQCCalc:
+        """Run the self-consistent field iteration and return the converged calculation.
 
+        Arguments
+        ---------
+        dm0: str or torch.Tensor or SpinParam of torch.Tensor
+            Initial density-matrix guess. ``"1e"`` (default) builds it from the
+            one-electron Hamiltonian.
+        eigen_options: dict or None
+            Options forwarded to the orbital diagonalization (default
+            ``{"method": "exacteig"}``).
+        fwd_options: dict or None
+            Options for the forward SCF fixed-point solver.
+        bck_options: dict or None
+            Options for the implicit (backward) solve used by autograd.
+        return_history: bool
+            If True, keep the density-matrix history on ``self.density_hist``.
+            This is for diagnostics only -- it breaks ``backward()`` through the
+            solve, so do not combine it with gradient-carrying runs.
+        """
+        self._solve_warnings = []
         # get default options
         if not self._variational:
             fwd_defopt = {
@@ -107,19 +128,34 @@ class SCF_QCCalc(BaseQCCalc):
         if not self._variational:
             scp0 = self._engine.dm2scp(dm)
 
-            # do the self-consistent iteration
-            sc_result = xitorch.optimize.equilibrium(
-                fcn=self._engine.scp2scp,
-                y0=scp0,
-                bck_options={**bck_options},
-                return_history=return_history,
-                **fwd_options)
+            # Grad-carrying solve. NOTE: we deliberately do NOT pass
+            # return_history here -- with return_history=True xitorch.equilibrium
+            # returns a (scp, history) tuple, which is incompatible with
+            # backward() (the autograd Function then has multiple outputs and
+            # _RootFinder.backward accepts only one grad). Capture xitorch's
+            # ConvergenceWarning (otherwise silently discarded).
+            with warnings.catch_warnings(record=True) as _wlist:
+                warnings.simplefilter("always")
+                scp = xitorch.optimize.equilibrium(
+                    fcn=self._engine.scp2scp,
+                    y0=scp0,
+                    bck_options={**bck_options},
+                    **fwd_options)
+            self._solve_warnings = [str(w.message) for w in _wlist]
 
-            if isinstance(sc_result, tuple):
-                scp, scp_history = sc_result
+            # The SCF trajectory is inspection-only (non-differentiable), so when
+            # requested we recover it with a detached re-solve of the same
+            # deterministic iteration -- this keeps return_history compatible
+            # with autograd, unlike passing it into the grad-carrying solve.
+            if return_history:
+                with torch.no_grad():
+                    _, scp_history = xitorch.optimize.equilibrium(
+                        fcn=self._engine.scp2scp,
+                        y0=scp0.detach(),
+                        bck_options={**bck_options},
+                        return_history=True,
+                        **fwd_options)
                 self.density_hist = [self._engine.scp2dm(x) for x in scp_history]
-            else:
-                scp = sc_result
 
             # post-process parameters
             self._dm = self._engine.scp2dm(scp)
