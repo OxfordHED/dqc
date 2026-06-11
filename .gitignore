@@ -1,5 +1,6 @@
 # misc files
 _version.txt
+_temp_cache*.h5
 
 # profiling files
 profile.sh
@@ -65,6 +66,7 @@ coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+.ruff_cache/
 
 # Translations
 *.mo
@@ -119,3 +121,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 /figures/
+
+# generated diagnostics artifacts (figures + regenerable result JSON)
+diagnostics/figures/
+
+# xctrain training run outputs
+runs/
