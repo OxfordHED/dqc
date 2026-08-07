@@ -561,6 +561,10 @@ class HamiltonCGTO(BaseHamilton):
             (*potinfo.value.shape[:-1], nao, nao), dtype=self.dtype, device=self.device
         )
 
+        # if the potential already carries the quadrature weights (see
+        # ValGrad.weighted), the weights must not be applied again here
+        left_basis = self.basis if potinfo.weighted else self.basis_dvolume
+
         # Split the r-dimension into several parts, it is usually faster than
         # evaluating all at once
         maxnumel = config.CHUNK_MEMORY // get_dtype_memsize(self.basis)
@@ -584,12 +588,14 @@ class HamiltonCGTO(BaseHamilton):
                 vb += 2 * lapl.unsqueeze(-1) * self.lapl_basis[ioff:iend, :]
 
             # calculating the matrix from multiplication with the basis
-            mat += torch.matmul(self.basis_dvolume[ioff:iend, :].transpose(-2, -1), vb)
+            mat += torch.matmul(left_basis[ioff:iend, :].transpose(-2, -1), vb)
 
             if self.xcfamily == 4:  # MGGA
                 assert potinfo.lapl is not None  # (..., nrgrid)
                 assert potinfo.kin is not None
-                lapl_kin_dvol = (2 * lapl + 0.5 * kin) * self.dvolume[..., ioff:iend]
+                lapl_kin_dvol = 2 * lapl + 0.5 * kin
+                if not potinfo.weighted:
+                    lapl_kin_dvol = lapl_kin_dvol * self.dvolume[..., ioff:iend]
                 mat += torch.einsum(
                     "...r,rb,rc->...bc", lapl_kin_dvol, grad_basis0, grad_basis0
                 )
@@ -661,6 +667,8 @@ class HamiltonCGTO(BaseHamilton):
                 self.getparamnames("_dm2densinfo", prefix=prefix)
                 + self.getparamnames("_get_vxc_from_potinfo", prefix=prefix)
                 + self.xc.getparamnames("get_vxc", prefix=prefix + "xc.")
+                # xc.get_vxc reads the quadrature weights through densinfo.grid
+                + self.grid.getparamnames("get_dvolume", prefix=prefix + "grid.")
             )
         elif methodname == "_dm2densinfo":
             params = [prefix + "basis"] + self._orthozer.getparamnames(

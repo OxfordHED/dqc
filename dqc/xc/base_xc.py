@@ -59,11 +59,28 @@ class BaseXC(xt.EditableModule):
             kwargs["graph"] = graph
             kwargs["edge_feats"] = edge_feats
 
+        # The vxc that makes the Fock matrix the true derivative of the energy
+        # E = sum_r' w_r' e(r') is the weighted column sum
+        # sum_r' w_r' d(e(r')) / d(dens(r)), i.e. a VJP with the quadrature
+        # weights as the output vector. For a local functional this reduces to
+        # w_r * d(e(r)) / d(dens(r)), so weighting here and skipping the weight
+        # in the matrix assembly (potinfo.weighted below) is exact for local
+        # functionals too — but it is required for nonlocal functionals (e.g.
+        # graph models) that couple grid points, where a plain ones-VJP is not
+        # the derivative of any energy. Without a grid we fall back to the
+        # ones-VJP, which is only correct for local functionals.
+        grid = densinfo.grid if isinstance(densinfo, ValGrad) else densinfo.u.grid
+        weighted = grid is not None
+
         # mark the densinfo components as requiring grads
         with self._enable_grad_densinfo(densinfo):
             with torch.enable_grad():
                 edensity = self.get_edensityxc(densinfo, **kwargs)  # (*BD, nr)
-            grad_outputs = torch.ones_like(edensity)
+            if weighted:
+                dvolume = grid.get_dvolume().to(edensity.dtype)
+                grad_outputs = dvolume.expand_as(edensity).contiguous()
+            else:
+                grad_outputs = torch.ones_like(edensity)
             grad_enabled = torch.is_grad_enabled()
 
             if not isinstance(densinfo, ValGrad):  # polarized case
@@ -76,7 +93,10 @@ class BaseXC(xt.EditableModule):
                         grad_outputs=grad_outputs,
                     )
 
-                    return SpinParam(u=ValGrad(value=dedn_u), d=ValGrad(value=dedn_d))
+                    return SpinParam(
+                        u=ValGrad(value=dedn_u, weighted=weighted),
+                        d=ValGrad(value=dedn_d, weighted=weighted),
+                    )
 
                 elif self.family == 2:  # GGA
                     params = (
@@ -93,8 +113,8 @@ class BaseXC(xt.EditableModule):
                     )
 
                     return SpinParam(
-                        u=ValGrad(value=dedn_u, grad=dedg_u),
-                        d=ValGrad(value=dedn_d, grad=dedg_d),
+                        u=ValGrad(value=dedn_u, grad=dedg_u, weighted=weighted),
+                        d=ValGrad(value=dedn_d, grad=dedg_d, weighted=weighted),
                     )
 
                 elif self.family == 4:
@@ -125,8 +145,10 @@ class BaseXC(xt.EditableModule):
                     dedk_d = dedk_d if dedk_d is not None else torch.zeros_like(dedn_d)
 
                     return SpinParam(
-                        u=ValGrad(value=dedn_u, grad=dedg_u, lapl=dedl_u, kin=dedk_u),
-                        d=ValGrad(value=dedn_d, grad=dedg_d, lapl=dedl_d, kin=dedk_d),
+                        u=ValGrad(value=dedn_u, grad=dedg_u, lapl=dedl_u,
+                                  kin=dedk_u, weighted=weighted),
+                        d=ValGrad(value=dedn_d, grad=dedg_d, lapl=dedl_d,
+                                  kin=dedk_d, weighted=weighted),
                     )
 
                 else:
@@ -144,7 +166,7 @@ class BaseXC(xt.EditableModule):
                         grad_outputs=grad_outputs,
                     )
 
-                    return ValGrad(value=dedn)
+                    return ValGrad(value=dedn, weighted=weighted)
 
                 elif self.family == 2:  # GGA
                     dedn, dedg = torch.autograd.grad(
@@ -154,7 +176,7 @@ class BaseXC(xt.EditableModule):
                         grad_outputs=grad_outputs,
                     )
 
-                    return ValGrad(value=dedn, grad=dedg)
+                    return ValGrad(value=dedn, grad=dedg, weighted=weighted)
 
                 elif self.family == 4:  # MGGA
                     dedn, dedg, dedl, dedk = torch.autograd.grad(
@@ -169,7 +191,8 @@ class BaseXC(xt.EditableModule):
                     dedl = dedl if dedl is not None else torch.zeros_like(dedn)
                     dedk = dedk if dedk is not None else torch.zeros_like(dedn)
 
-                    return ValGrad(value=dedn, grad=dedg, lapl=dedl, kin=dedk)
+                    return ValGrad(value=dedn, grad=dedg, lapl=dedl, kin=dedk,
+                                   weighted=weighted)
 
                 else:
                     raise NotImplementedError(
@@ -251,6 +274,34 @@ class BaseXC(xt.EditableModule):
         return self.__mul__(other)
 
 
+def _weight_potinfo(pot: ValGrad, grid) -> ValGrad:
+    # convert a plain potential to a weight-included one (see ValGrad.weighted)
+    assert grid is not None, \
+        "Cannot combine weighted and plain potentials without a grid"
+    dvol = grid.get_dvolume().to(pot.value.dtype)
+
+    def mulw(t):
+        return None if t is None else t * dvol
+
+    return ValGrad(
+        value=pot.value * dvol,
+        grad=mulw(pot.grad),
+        lapl=mulw(pot.lapl),
+        kin=mulw(pot.kin),
+        grid=pot.grid,
+        weighted=True,
+    )
+
+
+def _add_potinfo(a: ValGrad, b: ValGrad, grid) -> ValGrad:
+    # add two potentials, harmonizing the weighted flag if they differ
+    if a.weighted and not b.weighted:
+        b = _weight_potinfo(b, grid)
+    elif b.weighted and not a.weighted:
+        a = _weight_potinfo(a, grid)
+    return a + b
+
+
 class AddBaseXC(BaseXC):
     def __init__(self, a: BaseXC, b: BaseXC) -> None:
         self.a = a
@@ -271,10 +322,15 @@ class AddBaseXC(BaseXC):
         avxc = self.a.get_vxc(densinfo)
         bvxc = self.b.get_vxc(densinfo)
 
+        grid = densinfo.grid if isinstance(densinfo, ValGrad) else densinfo.u.grid
+
         if isinstance(densinfo, ValGrad):
-            return avxc + bvxc
+            return _add_potinfo(avxc, bvxc, grid)
         else:
-            return SpinParam(u=avxc.u + bvxc.u, d=avxc.d + bvxc.d)
+            return SpinParam(
+                u=_add_potinfo(avxc.u, bvxc.u, grid),
+                d=_add_potinfo(avxc.d, bvxc.d, grid),
+            )
 
     def get_edensityxc(
         self, densinfo: Union[ValGrad, SpinParam[ValGrad]]

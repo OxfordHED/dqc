@@ -413,12 +413,17 @@ class HamiltonCGTO_PBC(HamiltonCGTO):
             vb += 2 * potinfo.lapl.unsqueeze(-2).unsqueeze(-2) * self.lapl_basis
 
         # calculating the matrix from multiplication with the basis
-        mat = torch.matmul(vb, self.basis_dvolume_conj.transpose(-2, -1))
+        # if the potential already carries the quadrature weights (see
+        # ValGrad.weighted), the weights must not be applied again here
+        right_basis = self.basis.conj() if potinfo.weighted else self.basis_dvolume_conj
+        mat = torch.matmul(vb, right_basis.transpose(-2, -1))
 
         if self.xcfamily == 4:  # MGGA
             assert potinfo.lapl is not None  # (..., nrgrid)
             assert potinfo.kin is not None
-            lapl_kin_dvol = (2 * potinfo.lapl + 0.5 * potinfo.kin) * self.dvolume
+            lapl_kin_dvol = 2 * potinfo.lapl + 0.5 * potinfo.kin
+            if not potinfo.weighted:
+                lapl_kin_dvol = lapl_kin_dvol * self.dvolume
             mat += torch.einsum("...r,kbr,kcr->...kbc", lapl_kin_dvol, self.grad_basis[0], self.grad_basis[0])
             mat += torch.einsum("...r,kbr,kcr->...kbc", lapl_kin_dvol, self.grad_basis[1], self.grad_basis[1])
             mat += torch.einsum("...r,kbr,kcr->...kbc", lapl_kin_dvol, self.grad_basis[2], self.grad_basis[2])

@@ -155,6 +155,13 @@ class ValGrad:
     kin: torch.Tensor or None
         If tensor, represents the local kinetic energy density.
         It should have the same shape as ``value``.
+    weighted: bool
+        Only meaningful when this object represents a potential (dE/d-density).
+        If True, each channel already includes the quadrature weight of its grid
+        point, i.e. ``value[r] = sum_r' w_r' * d(edens[r']) / d(dens[r])``, and
+        the Fock-matrix assembly must not multiply by the weights again.
+        Needed for nonlocal functionals where the weight belongs to the source
+        point r' rather than the observation point r.
     """
     # data structure used as a umbrella class for density profiles and
     # the derivative of the potential w.r.t. density profiles
@@ -165,15 +172,19 @@ class ValGrad:
     lapl: Optional[torch.Tensor] = None  # torch.Tensor of the laplace of the value
     kin: Optional[torch.Tensor] = None  # torch.Tensor of the kinetic energy density
     grid: BaseGrid | None = None  # torch.Tensor of the grid
+    weighted: bool = False  # whether the quadrature weights are already included
 
     def __add__(self, b: ValGrad) -> ValGrad:
         assert self.grid == b.grid
+        assert self.weighted == b.weighted, \
+            "Cannot add a weight-included potential to a plain one"
         return ValGrad(
             value=self.value + b.value,
             grad=self.grad + b.grad if self.grad is not None else None,
             lapl=self.lapl + b.lapl if self.lapl is not None else None,
             kin=self.kin + b.kin if self.kin is not None else None,
             grid=self.grid,
+            weighted=self.weighted,
         )
 
     def __mul__(self, f: Union[float, int, torch.Tensor]) -> ValGrad:
@@ -186,6 +197,7 @@ class ValGrad:
             lapl=self.lapl * f if self.lapl is not None else None,
             kin=self.kin * f if self.kin is not None else None,
             grid=self.grid,
+            weighted=self.weighted,
         )
 
 
