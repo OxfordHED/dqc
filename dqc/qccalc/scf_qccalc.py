@@ -1,15 +1,19 @@
 from __future__ import annotations
+import warnings
 from abc import abstractmethod, abstractproperty
-from typing import Optional, Dict, Any, List, Union, Tuple
+from typing import Callable, Optional, Dict, Any, List, Union, Tuple, TypeVar
 import torch
 import xitorch as xt
 import xitorch.linalg
 import xitorch.optimize
+from xitorch import ConvergenceWarning
 from dqc.system.base_system import BaseSystem
 from dqc.qccalc.base_qccalc import BaseQCCalc
 from dqc.utils.datastruct import SpinParam
 from dqc.utils.config import config
 from dqc.utils.misc import set_default_option
+
+_T = TypeVar("_T")
 
 class SCF_QCCalc(BaseQCCalc):
     """
@@ -35,9 +39,40 @@ class SCF_QCCalc(BaseQCCalc):
         self.device = self._engine.device
         self._has_run = False
         self._variational = variational
+        self._converged: Optional[bool] = None
 
     def get_system(self) -> BaseSystem:
         return self._engine.get_system()
+
+    def is_converged(self) -> bool:
+        """
+        Whether the self-consistent solve reached its fixed point.
+
+        Only meaningful after :meth:`run`. Callers that differentiate through
+        the solve must check this: the implicit-function gradient taken through
+        the iteration is the gradient of the reported energy *at* the fixed
+        point. Away from it the reported energy and that gradient are
+        derivatives of different functions and disagree silently, so a
+        non-converged result is safe to read but not safe to backpropagate.
+        """
+        assert self._has_run
+        return bool(self._converged)
+
+    def _solve_recording_convergence(self, solve: Callable[[], _T]) -> _T:
+        # Record whether xitorch reported non-convergence, independently of the
+        # ambient warning filters -- is_converged() must not depend on how the
+        # caller happens to have configured warnings. catch_warnings swallows
+        # everything raised inside the block, so re-emit afterwards, outside it,
+        # where the caller's own filters apply again: observable warning
+        # behaviour is unchanged. warn_explicit with the recorded location keeps
+        # the messages attributed to where they were actually raised.
+        with warnings.catch_warnings(record=True) as ws:
+            warnings.simplefilter("always", ConvergenceWarning)
+            result = solve()
+        self._converged = not any(issubclass(w.category, ConvergenceWarning) for w in ws)
+        for w in ws:
+            warnings.warn_explicit(w.message, w.category, w.filename, w.lineno)
+        return result
 
     def run(self, dm0: Optional[Union[str, torch.Tensor, SpinParam[torch.Tensor]]] = "1e",  # type: ignore
             eigen_options: Optional[Dict[str, Any]] = None,
@@ -108,12 +143,13 @@ class SCF_QCCalc(BaseQCCalc):
             scp0 = self._engine.dm2scp(dm)
 
             # do the self-consistent iteration
-            sc_result = xitorch.optimize.equilibrium(
-                fcn=self._engine.scp2scp,
-                y0=scp0,
-                bck_options={**bck_options},
-                return_history=return_history,
-                **fwd_options)
+            sc_result = self._solve_recording_convergence(
+                lambda: xitorch.optimize.equilibrium(
+                    fcn=self._engine.scp2scp,
+                    y0=scp0,
+                    bck_options={**bck_options},
+                    return_history=return_history,
+                    **fwd_options))
 
             if isinstance(sc_result, tuple):
                 scp, scp_history = sc_result
@@ -154,14 +190,18 @@ class SCF_QCCalc(BaseQCCalc):
             params0, coeffs0 = dm2params(dm)
             params0 = params0.detach()
             coeffs0 = coeffs0.detach()
-            min_params0: torch.Tensor = xitorch.optimize.minimize(
-                fcn=self._engine.aoparams2ene,
-                # random noise to add the chance of it gets to the minimum, not
-                # a saddle point
-                y0=params0 + torch.randn_like(params0) * 0.03 / params0.numel(),
-                params=(coeffs0, None,),  # coeffs & with_penalty
-                bck_options={**bck_options},
-                **fwd_options).detach()
+            # only this solve determines convergence; the penalised re-run below
+            # is a deliberate maxiter=0 pass to build the graph, so recording it
+            # would report non-convergence for every variational calculation
+            min_params0: torch.Tensor = self._solve_recording_convergence(
+                lambda: xitorch.optimize.minimize(
+                    fcn=self._engine.aoparams2ene,
+                    # random noise to add the chance of it gets to the minimum, not
+                    # a saddle point
+                    y0=params0 + torch.randn_like(params0) * 0.03 / params0.numel(),
+                    params=(coeffs0, None,),  # coeffs & with_penalty
+                    bck_options={**bck_options},
+                    **fwd_options)).detach()
 
             if torch.is_grad_enabled():
                 # If the gradient is required, then put it through the minimization
