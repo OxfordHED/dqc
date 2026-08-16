@@ -78,7 +78,8 @@ class SCF_QCCalc(BaseQCCalc):
             eigen_options: Optional[Dict[str, Any]] = None,
             fwd_options: Optional[Dict[str, Any]] = None,
             bck_options: Optional[Dict[str, Any]] = None,
-            return_history: bool = False) -> BaseQCCalc:
+            return_history: bool = False,
+            break_symmetry: float = 0.0) -> BaseQCCalc:
 
         # get default options
         if not self._variational:
@@ -119,7 +120,13 @@ class SCF_QCCalc(BaseQCCalc):
         self._engine.set_eigen_options(eigen_options)
 
         # set up the initial self-consistent param guess
-        if dm0 is None:
+        if break_symmetry > 0.0 and self._polarized:
+            # spin-symmetry-broken start (HOMO-LUMO mixing of core orbitals);
+            # lets UKS reach spin-broken solutions the symmetric guess misses.
+            dm = SpinParam.apply_fcn(
+                lambda x: x.detach(),
+                self._engine.get_symmetry_broken_dm0(float(break_symmetry)))
+        elif dm0 is None:
             dm = self._get_zero_dm()
         elif isinstance(dm0, str):
             if dm0 == "1e":  # initial density based on 1-electron Hamiltonian
