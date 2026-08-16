@@ -75,6 +75,35 @@ def test_break_symmetry_noop_when_restricted():
 
 
 @pytest.mark.regression
+def test_explicit_dm0_takes_precedence_over_break_symmetry():
+    # an explicitly supplied dm0 wins; break_symmetry only replaces a guess that
+    # run() would otherwise have built for itself. Feeding back a converged
+    # symmetric dm must therefore keep the symmetric solution.
+    sym = KS(_h2(5.0), xc=XC, restricted=False).run()
+    e_sym = float(sym.energy())
+    qc = KS(_h2(5.0), xc=XC, restricted=False).run(
+        dm0=sym.aodm(), break_symmetry=0.785)
+    assert qc.is_converged()
+    assert abs(float(qc.energy()) - e_sym) < 1e-8
+    assert _spin_break(qc) < 1e-3
+    # ...while the same call without an explicit dm0 does break symmetry
+    free = KS(_h2(5.0), xc=XC, restricted=False).run(break_symmetry=0.785)
+    assert _spin_break(free) > 0.5
+
+
+@pytest.mark.regression
+def test_break_symmetry_still_applies_to_autobuilt_guesses():
+    # dm0=None and the default "1e" are both built by run() itself, so
+    # break_symmetry applies to them (this is what lets a caller that passes a
+    # cache-miss None still get the broken seed).
+    for dm0 in (None, "1e"):
+        qc = KS(_h2(5.0), xc=XC, restricted=False).run(
+            dm0=dm0, break_symmetry=0.785)
+        assert qc.is_converged()
+        assert _spin_break(qc) > 0.5, f"dm0={dm0!r} did not break symmetry"
+
+
+@pytest.mark.regression
 def test_broken_symmetry_gradient_matches_finite_difference():
     def energy(a):
         xc = _LearnLDA(a)

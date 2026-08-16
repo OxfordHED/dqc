@@ -120,7 +120,11 @@ class SCF_QCCalc(BaseQCCalc):
         self._engine.set_eigen_options(eigen_options)
 
         # set up the initial self-consistent param guess
-        if break_symmetry > 0.0 and self._polarized:
+        if dm0 is not None and not isinstance(dm0, str):
+            # an explicitly supplied guess always wins: break_symmetry only ever
+            # replaces a guess this method would otherwise have built itself.
+            dm = SpinParam.apply_fcn(lambda dm0: dm0.detach(), dm0)
+        elif break_symmetry > 0.0 and self._polarized:
             # spin-symmetry-broken start (HOMO-LUMO mixing of core orbitals);
             # lets UKS reach spin-broken solutions the symmetric guess misses.
             dm = SpinParam.apply_fcn(
@@ -128,15 +132,13 @@ class SCF_QCCalc(BaseQCCalc):
                 self._engine.get_symmetry_broken_dm0(float(break_symmetry)))
         elif dm0 is None:
             dm = self._get_zero_dm()
-        elif isinstance(dm0, str):
+        else:
             if dm0 == "1e":  # initial density based on 1-electron Hamiltonian
                 dm = self._get_zero_dm()
                 scp0 = self._engine.dm2scp(dm)
                 dm = self._engine.scp2dm(scp0)
             else:
                 raise RuntimeError("Unknown dm0: %s" % dm0)
-        else:
-            dm = SpinParam.apply_fcn(lambda dm0: dm0.detach(), dm0)
 
         # making it spin param for polarized and tensor for nonpolarized
         if isinstance(dm, torch.Tensor) and self._polarized:
