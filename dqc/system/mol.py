@@ -33,44 +33,45 @@ __all__ = ["Mol"]
 class MolEmbedding:
     """Per-grid-point node features for graph (nonlocal) xc models.
 
-    The leading columns are the density block, followed by the grid descriptors
-    (``radial_dists``, ``atom_zs``) or the raw coordinates. Two density blocks
+    The features are the xc ingredients themselves and nothing else. Two sets
     are available:
 
     * ``gga=False`` (default): the LDA-level pair ``(n, zeta)``, where ``n`` is
       the total density and ``zeta`` the fractional spin polarization.
-    * ``gga=True``: the spin-resolved quadruple
-      ``(n_u, n_d, |grad n_u|, |grad n_d|)``. The gradient *norms* are used
-      rather than the raw gradient vectors so that the features stay invariant
-      under rotation of the molecule, as an xc functional must be.
+    * ``gga=True``: the full spin-resolved GGA set
+      ``(n_u, n_d, |grad n_u|, |grad n_d|, grad n_u . grad n_d)``.
 
-    The density block always comes first, so a consumer can slice it off with
-    ``inputs[..., :embed.n_density_features]`` without knowing which block it got.
+    The gradient terms are rotational invariants rather than raw vector
+    components, as an xc functional must be. The three of them span the same
+    information as libxc's ``(sigma_uu, sigma_ud, sigma_dd)``: the first two are
+    ``sqrt(sigma_uu)`` and ``sqrt(sigma_dd)``, and the cross term is ``sigma_ud``
+    itself. Without the cross term the set would be blind to the angle between
+    the two spin-density gradients, which spin-polarized correlation depends on
+    through ``|grad n|^2 = sigma_uu + 2 sigma_ud + sigma_dd``.
+
+    ``append_raw_coords`` additionally appends the grid coordinates, for models
+    (GINO) that need the geometry itself. Use ``n_density_features`` to slice
+    the density block off the front without hardcoding its width.
     """
 
     def __init__(self, mol: "Mol", append_raw_coords: bool = False, gga: bool = False):
-        # Todo: How do we get distinction between same atom grid or different atom grid?
-        # (without violating permutation invariance)
+        self._append_coords = append_raw_coords
+        self.gga = gga
+
         try:
             grid = mol.get_grid()
         except RuntimeError:
             mol.setup_grid()
             grid = mol.get_grid()
 
-        self._append_coords = append_raw_coords
-        self.gga = gga
-
-        if not append_raw_coords:
-            radial_dists = [
-                torch.norm(atomg.get_rgrid(), p=2, dim=1) for atomg in grid._atomgrids
-            ]
-            self._radial_dists = torch.cat(radial_dists, dim=0)
-            len_subgrids = torch.tensor([rg.shape[0] for rg in radial_dists])
-            self._atom_zs = torch.repeat_interleave(mol.atomzs, len_subgrids)
-            self._chunk_tracker = 0
-            del grid._atomgrids
-        else:
+        if append_raw_coords:
             self._coordinates = grid.get_rgrid()
+        else:
+            # the per-atom grids duplicate coordinates already held by the
+            # combined grid and nothing reads them once the graph is built, so
+            # release them here. Purely a memory measure; no feature uses them.
+            if hasattr(grid, "_atomgrids"):
+                del grid._atomgrids
 
     @property
     def append_raw_coords(self) -> bool:
@@ -79,23 +80,28 @@ class MolEmbedding:
     @property
     def n_density_features(self) -> int:
         """Number of leading columns of ``apply()`` that carry the density."""
-        return 4 if self.gga else 2
+        return 5 if self.gga else 2
 
     @staticmethod
-    def _grad_norm(valgrad: ValGrad, label: str) -> torch.Tensor:
-        # valgrad.grad: (*BD, ndim, nr) -> (*BD, nr)
+    def _require_grad(valgrad: ValGrad, label: str) -> torch.Tensor:
         if valgrad.grad is None:
             raise RuntimeError(
                 "The %s density gradient is not available, so the GGA embedding "
                 "cannot be built. The xc model must declare family >= 2 so that "
                 "the hamiltonian evaluates the density gradient on the grid." % label
             )
-        sigma = torch.einsum("...dr,...dr->...r", valgrad.grad, valgrad.grad)
+        return valgrad.grad
+
+    @staticmethod
+    def _norm(grad: torch.Tensor) -> torch.Tensor:
+        # grad: (*BD, ndim, nr) -> (*BD, nr)
+        sigma = torch.einsum("...dr,...dr->...r", grad, grad)
         # floor sigma *before* the sqrt: d(sqrt)/d(sigma) diverges at 0, and the
         # potential is obtained by differentiating through these features, so an
         # unfloored norm hands back inf/nan at any point with a vanishing
         # gradient. torch.where on the argument (not on the result) also keeps
-        # the floored branch's derivative at exactly zero.
+        # the floored branch's derivative at exactly zero. The cross term needs
+        # no such guard: it is a plain dot product with no sqrt.
         floor = ldexp(1.0, -53) ** 2
         sigma = torch.where(sigma > floor, sigma, torch.full_like(sigma, floor))
         return torch.sqrt(sigma)
@@ -106,14 +112,15 @@ class MolEmbedding:
         if self.gga:
             if isinstance(densinfo, SpinParam):
                 n_u, n_d = densinfo.u.value, densinfo.d.value
-                gn_u = self._grad_norm(densinfo.u, "spin-up")
-                gn_d = self._grad_norm(densinfo.d, "spin-down")
+                grad_u = self._require_grad(densinfo.u, "spin-up")
+                grad_d = self._require_grad(densinfo.d, "spin-down")
             else:
                 # unpolarized: value/grad hold the *total* density, split evenly
                 # over the two spin channels
                 n_u = n_d = 0.5 * densinfo.value
-                gn_u = gn_d = 0.5 * self._grad_norm(densinfo, "total")
-            return [n_u, n_d, gn_u, gn_d]
+                grad_u = grad_d = 0.5 * self._require_grad(densinfo, "total")
+            sigma_ud = torch.einsum("...dr,...dr->...r", grad_u, grad_d)
+            return [n_u, n_d, self._norm(grad_u), self._norm(grad_d), sigma_ud]
 
         if isinstance(densinfo, SpinParam):
             dens = SpinParam.sum(densinfo).value
@@ -126,16 +133,12 @@ class MolEmbedding:
         return [dens, zeta]
 
     def apply(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
-        dens_feats = self._density_features(densinfo)
+        feats = torch.stack(self._density_features(densinfo), dim=-1)
 
         if self._append_coords:
-            return torch.cat(
-                [torch.stack(dens_feats, dim=-1), self._coordinates], dim=-1
-            )
+            return torch.cat([feats, self._coordinates], dim=-1)
 
-        return torch.stack(
-            [*dens_feats, self._radial_dists, self._atom_zs], dim=-1
-        )
+        return feats
 
 
 class Mol(BaseSystem):
