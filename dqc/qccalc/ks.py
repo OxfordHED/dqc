@@ -83,9 +83,23 @@ class _KSEngine(BaseSCFEngine):
             if hasattr(self.xc, "is_graph") and self.xc.is_graph:
                 # Todo: figure out where to transpose
                 is_gino = hasattr(self.xc, "is_gino") and self.xc.is_gino
+                # opt-in: models that want the spin-resolved GGA node features
+                # (n_u, n_d, |grad n_u|, |grad n_d|) instead of (n, zeta) set
+                # gga_embedding = True. Keeping it opt-in rather than keying off
+                # the family means existing graph checkpoints, including those
+                # with a GGA base model, keep the feature set they were trained on.
+                gga_embedding = getattr(self.xc, "gga_embedding", False)
+                if gga_embedding and self.xc.family < 2:
+                    raise RuntimeError(
+                        "gga_embedding requires the xc model to declare family >= 2, "
+                        "otherwise the hamiltonian never evaluates the density "
+                        "gradient on the grid (got family=%s)." % self.xc.family
+                    )
                 kwargs["graph"] = system.get_graph().T
                 kwargs["edge_feats"] = system.get_edge_feats()
-                kwargs["embed"] = system.get_embedding(append_raw_coords=is_gino)
+                kwargs["embed"] = system.get_embedding(
+                    append_raw_coords=is_gino, gga=gga_embedding
+                )
             self.hamilton.setup_grid(system.get_grid(), self.xc, **kwargs)
 
         # get the HF engine and build the hamiltonian

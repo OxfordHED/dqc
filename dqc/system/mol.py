@@ -31,7 +31,24 @@ __all__ = ["Mol"]
 
 
 class MolEmbedding:
-    def __init__(self, mol: "Mol", append_raw_coords: bool = False):
+    """Per-grid-point node features for graph (nonlocal) xc models.
+
+    The leading columns are the density block, followed by the grid descriptors
+    (``radial_dists``, ``atom_zs``) or the raw coordinates. Two density blocks
+    are available:
+
+    * ``gga=False`` (default): the LDA-level pair ``(n, zeta)``, where ``n`` is
+      the total density and ``zeta`` the fractional spin polarization.
+    * ``gga=True``: the spin-resolved quadruple
+      ``(n_u, n_d, |grad n_u|, |grad n_d|)``. The gradient *norms* are used
+      rather than the raw gradient vectors so that the features stay invariant
+      under rotation of the molecule, as an xc functional must be.
+
+    The density block always comes first, so a consumer can slice it off with
+    ``inputs[..., :embed.n_density_features]`` without knowing which block it got.
+    """
+
+    def __init__(self, mol: "Mol", append_raw_coords: bool = False, gga: bool = False):
         # Todo: How do we get distinction between same atom grid or different atom grid?
         # (without violating permutation invariance)
         try:
@@ -41,6 +58,7 @@ class MolEmbedding:
             grid = mol.get_grid()
 
         self._append_coords = append_raw_coords
+        self.gga = gga
 
         if not append_raw_coords:
             radial_dists = [
@@ -54,7 +72,49 @@ class MolEmbedding:
         else:
             self._coordinates = grid.get_rgrid()
 
-    def apply(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
+    @property
+    def append_raw_coords(self) -> bool:
+        return self._append_coords
+
+    @property
+    def n_density_features(self) -> int:
+        """Number of leading columns of ``apply()`` that carry the density."""
+        return 4 if self.gga else 2
+
+    @staticmethod
+    def _grad_norm(valgrad: ValGrad, label: str) -> torch.Tensor:
+        # valgrad.grad: (*BD, ndim, nr) -> (*BD, nr)
+        if valgrad.grad is None:
+            raise RuntimeError(
+                "The %s density gradient is not available, so the GGA embedding "
+                "cannot be built. The xc model must declare family >= 2 so that "
+                "the hamiltonian evaluates the density gradient on the grid." % label
+            )
+        sigma = torch.einsum("...dr,...dr->...r", valgrad.grad, valgrad.grad)
+        # floor sigma *before* the sqrt: d(sqrt)/d(sigma) diverges at 0, and the
+        # potential is obtained by differentiating through these features, so an
+        # unfloored norm hands back inf/nan at any point with a vanishing
+        # gradient. torch.where on the argument (not on the result) also keeps
+        # the floored branch's derivative at exactly zero.
+        floor = ldexp(1.0, -53) ** 2
+        sigma = torch.where(sigma > floor, sigma, torch.full_like(sigma, floor))
+        return torch.sqrt(sigma)
+
+    def _density_features(
+        self, densinfo: Union[ValGrad, SpinParam[ValGrad]]
+    ) -> List[torch.Tensor]:
+        if self.gga:
+            if isinstance(densinfo, SpinParam):
+                n_u, n_d = densinfo.u.value, densinfo.d.value
+                gn_u = self._grad_norm(densinfo.u, "spin-up")
+                gn_d = self._grad_norm(densinfo.d, "spin-down")
+            else:
+                # unpolarized: value/grad hold the *total* density, split evenly
+                # over the two spin channels
+                n_u = n_d = 0.5 * densinfo.value
+                gn_u = gn_d = 0.5 * self._grad_norm(densinfo, "total")
+            return [n_u, n_d, gn_u, gn_d]
+
         if isinstance(densinfo, SpinParam):
             dens = SpinParam.sum(densinfo).value
             zeta = (densinfo.u.value - densinfo.d.value) / torch.where(
@@ -63,12 +123,19 @@ class MolEmbedding:
         else:
             dens = densinfo.value
             zeta = torch.zeros_like(dens)
+        return [dens, zeta]
+
+    def apply(self, densinfo: Union[ValGrad, SpinParam[ValGrad]]) -> torch.Tensor:
+        dens_feats = self._density_features(densinfo)
 
         if self._append_coords:
-            return torch.cat([torch.stack([dens, zeta], dim=-1), self._coordinates], dim=-1)
+            return torch.cat(
+                [torch.stack(dens_feats, dim=-1), self._coordinates], dim=-1
+            )
 
-        return torch.stack([dens, zeta, self._radial_dists, self._atom_zs], dim=-1)
-
+        return torch.stack(
+            [*dens_feats, self._radial_dists, self._atom_zs], dim=-1
+        )
 
 
 class Mol(BaseSystem):
@@ -381,9 +448,27 @@ class Mol(BaseSystem):
             )
         return self._grid.edge_feats
 
-    def get_embedding(self, append_raw_coords: bool = False) -> MolEmbedding:
+    def get_embedding(
+        self, append_raw_coords: bool = False, gga: bool = False
+    ) -> MolEmbedding:
         if self._embedding is None:
-            self._embedding = MolEmbedding(self, append_raw_coords=append_raw_coords)
+            self._embedding = MolEmbedding(
+                self, append_raw_coords=append_raw_coords, gga=gga
+            )
+        elif self._embedding.append_raw_coords != append_raw_coords:
+            # the coordinate/grid-descriptor layout is fixed when the embedding
+            # is built (it tears down the atom grids), so it cannot be switched
+            # afterwards. Returning the cached one regardless would silently
+            # feed the model a different feature set than it asked for.
+            raise RuntimeError(
+                "The embedding of this Mol was already built with "
+                "append_raw_coords=%s and cannot be rebuilt with "
+                "append_raw_coords=%s." % (self._embedding.append_raw_coords, append_raw_coords)
+            )
+        else:
+            # gga only selects what apply() computes from densinfo, nothing is
+            # cached for it, so it is safe to flip on an existing embedding
+            self._embedding.gga = gga
         return self._embedding
 
     def requires_grid(self) -> bool:
