@@ -144,6 +144,10 @@ class _KSEngine(BaseSCFEngine):
         # convert the self-consistent parameter (scp) to the density matrix
         return self.hf_engine.scp2dm(scp)
 
+    def get_symmetry_broken_dm0(self, angle: float) -> SpinParam:
+        # spin-symmetry-broken initial guess (core-orbital HOMO-LUMO mixing)
+        return self.hf_engine.get_symmetry_broken_dm0(angle)
+
     def scp2scp(self, scp: torch.Tensor) -> torch.Tensor:
         # self-consistent iteration step from a self-consistent parameter (scp)
         # to an scp
